@@ -1,6 +1,6 @@
 use std::error::Error;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Symbol<'a> {
     Ident(&'a str),
     Number(i32),
@@ -56,7 +56,7 @@ fn slice_middle<'a, T>(slc: &'a [T]) -> Option<&'a [T]> {
     Some(&slc[1..slc.len() - 1])
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Tree<'a> {
     Branch(Vec<Tree<'a>>),
     Leaf(&'a Symbol<'a>),
@@ -84,12 +84,41 @@ impl Tree<'_> {
 fn main() {
     let sample_data = &[
         Token::Open,
-        Token::Open,
         Token::Symbol(Symbol::Number(1)),
+        Token::Symbol(Symbol::Number(2)),
+        Token::Open,
+            Token::Symbol(Symbol::Ident("+")),
+            Token::Symbol(Symbol::Number(1)),
+            Token::Symbol(Symbol::Number(2)),
         Token::Close,
         Token::Close,
     ];
 
     let tree = Tree::try_construct(sample_data).expect("Expected to construct tree");
     dbg!(tree);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn basic() {
+        let sample = &[
+            Token::Open,
+            Token::Symbol(Symbol::Number(1)), 
+            Token::Symbol(Symbol::Number(2)), 
+            Token::Symbol(Symbol::Number(3)), 
+            Token::Close,
+        ];
+        
+        let expected = Tree::Branch(vec![
+            Tree::Branch(vec![
+                Tree::Leaf(&Symbol::Number(1)),
+                Tree::Leaf(&Symbol::Number(2)),
+                Tree::Leaf(&Symbol::Number(3)),
+            ]),
+        ]);
+
+        assert_eq!(Tree::try_construct(sample).unwrap(), expected);
+    }
 }
