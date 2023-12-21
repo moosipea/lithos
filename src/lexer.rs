@@ -9,16 +9,26 @@ fn should_stop_taking(c: char) -> bool {
     }
 }
 
+fn remove_leading_whitespace(s: &str) -> &str {
+    for (i, c) in s.char_indices() {
+        match c {
+            c if c.is_whitespace() => {}
+            _ => return &s[i..]
+        }
+    }
+    s
+}
+
 fn read(src: &str) -> Result<(&str, &str), Box<dyn Error>> {
+    let src = remove_leading_whitespace(src);
     let first_str = &src[0..1];
     match first_str {
         "(" | ")" => return Ok((first_str, &src[1..])),
         _ => {}
     }
-
+    
     let indices: Vec<_> = src
         .char_indices()
-        .skip_while(|(_, e)| e.is_whitespace())
         .take_while(|(_, c)| !should_stop_taking(*c))
         .map(|(i, _)| i)
         .collect();
