@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn lexer_basic() {
-        let sample = "(1, 2, 3)";
+        let sample = "(1 2 3)";
         let expected = &[
             Token::Open,
             Token::Symbol(Symbol::Number(1)),
