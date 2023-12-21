@@ -1,21 +1,32 @@
 use super::*;
 use std::error::Error;
 
-// TODO: lexing for idents (i forgor)
+fn should_stop_taking(c: char) -> bool {
+    match c {
+        '(' | ')' => true,
+        c if c.is_whitespace() => true,
+        _ => false,
+    }
+}
+
 fn read(src: &str) -> Result<(&str, &str), Box<dyn Error>> {
-    let mut start = 0;
-    for (i, c) in src.char_indices() {
-        match c {
-            w if w.is_whitespace() => {
-                start += 1;
-                continue
-            },
-            '(' | ')' => return Ok((&src[0..=i], &src[i+1..])),
-            _ => return Ok((&src[start..=i], &src[i+1..]))
-        }
+    let first_str = &src[0..1];
+    match first_str {
+        "(" | ")" => return Ok((first_str, &src[1..])),
+        _ => {}
     }
 
-    Err("Read failed".into())
+    let indices: Vec<_> = src
+        .char_indices()
+        .skip_while(|(_, e)| e.is_whitespace())
+        .take_while(|(_, c)| !should_stop_taking(*c))
+        .map(|(i, _)| i)
+        .collect();
+
+    let start = *indices.first().ok_or("Ident with length 0")?;
+    let end = *indices.last().ok_or("Ident with length 0")?;
+
+    Ok((&src[start..=end], &src[end+1..]))
 }
 
 fn is_number(s: &str) -> bool {
