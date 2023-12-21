@@ -1,12 +1,11 @@
-use rust_lisp_parser::ast::*;
-
 fn main() {
 
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rust_lisp_parser::*;
+    use rust_lisp_parser::ast::Tree;
     #[test]
     fn basic() {
         let sample = &[

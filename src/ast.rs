@@ -1,17 +1,5 @@
 use std::error::Error;
-
-#[derive(Debug, PartialEq)]
-pub enum Symbol<'a> {
-    Ident(&'a str),
-    Number(i32),
-}
-
-#[derive(Debug)]
-pub enum Token<'a> {
-    Open,
-    Close,
-    Symbol(Symbol<'a>),
-}
+use super::*;
 
 fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>]), Box<dyn Error>> {
     match toks[0] {
