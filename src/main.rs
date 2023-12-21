@@ -13,57 +13,71 @@ enum Token<'a> {
     Symbol(Symbol<'a>),
 }
 
+fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>]), Box<dyn Error>> {
+    match toks[0] {
+        Token::Symbol(_) => Ok((&toks[0..1], &toks[1..])),
+        Token::Open => {
+            let mut scope = 0;
+            for (i, t) in toks.iter().enumerate() {
+                match t {
+                    Token::Open => scope += 1,
+                    Token::Close => scope -= 1,
+                    _ => {}
+                }
+                if scope == 0 {
+                    return Ok((&toks[0..i + 1], &toks[i + 1..]));
+                }
+            }
+            Err("Unmatched '('".into())
+        }
+        _ => Err("Expected '(' or symbol".into()),
+    }
+}
+
+fn take_toplevel_exprs<'a>(toks: &'a [Token]) -> Result<Vec<&'a [Token<'a>]>, Box<dyn Error>> {
+    if toks.is_empty() {
+        return Err("Empty list".into());
+    }
+
+    let mut exprs = Vec::new();
+    let mut tail = toks;
+    while !tail.is_empty() {
+        let head;
+        (head, tail) = take_expr(tail)?;
+        exprs.push(head);
+    }
+    Ok(exprs)
+}
+
+fn slice_middle<'a, T>(slc: &'a [T]) -> Option<&'a [T]> {
+    if slc.len() < 3 {
+        return None;
+    }
+    Some(&slc[1..slc.len() - 1])
+}
+
 #[derive(Debug)]
 enum Tree<'a> {
     Branch(Vec<Tree<'a>>),
     Leaf(&'a Symbol<'a>),
 }
 
-fn take_next_expr<'a>(
-    tokens: &'a [Token],
-) -> Result<(&'a [Token<'a>], &'a [Token<'a>]), Box<dyn Error>> {
-    println!("(!) Taking from {tokens:?}");
-    if tokens.is_empty() {
-        return Err("Empty list".into());
-    }
-
-    if let Token::Symbol(_) = tokens[0] {
-        return Ok((&tokens[0..1], &tokens[2..]));
-    }
-
-    let mut scope = 0;
-    for (i, t) in tokens.iter().enumerate() {
-        match t {
-            Token::Open => scope += 1,
-            Token::Close => scope -= 1,
-            _ => {}
-        }
-
-        if scope == 0 {
-            return Ok((&tokens[1..i], &tokens[i..]))
-        }
-    }
-
-    Err("Failed to take expr".into())
-}
-
 impl Tree<'_> {
-    pub fn try_construct<'a>(tokens: &'a [Token]) -> Result<Tree<'a>, Box<dyn Error>> {
-        let (head, tail) = take_next_expr(tokens)?;
-
-        println!("Head: {head:?}");
-
-        let next = match &head[0] {
-            Token::Symbol(s) => Tree::Leaf(s),
-            _ => Self::try_construct(head)?
-        };
-
-        match &tail[0] {
-            Token::Close => {},
-            _ => { Self::try_construct(tail)?; }
+    pub fn try_construct<'a>(toks: &'a [Token]) -> Result<Tree<'a>, Box<dyn Error>> {
+        match toks {
+            [Token::Symbol(sym)] => Ok(Tree::Leaf(sym)),
+            _ => {
+                let expressions = take_toplevel_exprs(toks)?;
+                let tree: Result<Vec<_>, _> = expressions
+                    .into_iter()
+                    .map(|e| match slice_middle(e) {
+                        Some(middle) => Self::try_construct(middle),
+                        None => Self::try_construct(e),
+                    })
+                    .collect();
+                Ok(Tree::Branch(tree?))
+            }
         }
-
-        todo!()
     }
 }
 
@@ -71,11 +85,11 @@ fn main() {
     let sample_data = &[
         Token::Open,
         Token::Open,
-            Token::Symbol(Symbol::Number(1)),
+        Token::Symbol(Symbol::Number(1)),
         Token::Close,
         Token::Close,
     ];
 
     let tree = Tree::try_construct(sample_data).expect("Expected to construct tree");
-    println!("{tree:?}");
+    dbg!(tree);
 }
