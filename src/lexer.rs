@@ -1,6 +1,7 @@
 use super::*;
 use std::error::Error;
 
+// TODO: lexing for idents (i forgor)
 fn read(src: &str) -> Result<(&str, &str), Box<dyn Error>> {
     let mut start = 0;
     for (i, c) in src.char_indices() {
