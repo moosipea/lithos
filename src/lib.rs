@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod lexer;
+pub mod codegen;
 
 #[derive(Debug, PartialEq)]
 pub enum Symbol<'a> {
