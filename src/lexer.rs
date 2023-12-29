@@ -60,8 +60,9 @@ impl<'a> TryFrom<&'a str> for Token<'a> {
     }
 }
 
-pub fn lex(mut src: &str) -> Result<Vec<Token>, Box<dyn Error>> {
+pub fn lex(src: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     let mut tokens = Vec::new();
+    let mut src = src.trim_end();
     while !src.is_empty() {
         let tok;
         (tok, src) = read(src)?;
