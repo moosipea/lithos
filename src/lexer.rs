@@ -32,6 +32,8 @@ fn read(src: &str) -> Result<(&str, &str), Box<dyn Error>> {
         .take_while(|(_, c)| !should_stop_taking(*c))
         .map(|(i, _)| i)
         .collect();
+    
+    println!("(!) Got {src}");
 
     let start = *indices.first().ok_or("Ident with length 0")?;
     let end = *indices.last().ok_or("Ident with length 0")?;

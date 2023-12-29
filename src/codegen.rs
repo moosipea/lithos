@@ -82,41 +82,41 @@ fn make_call<'a>(tree: &'a Tree) -> Result<AstToken<'a>, Box<dyn Error>> {
     Ok(AstToken::Call { name, args })
 }
 
-// trait SequenceExt {
-//     fn sequence(&mut self) -> Option<impl Iterator>;
-// }
-// 
-// impl SequenceExt for dyn Iterator<Item = Option<i32>> {
-//     fn sequence<'a>(&'a mut self) -> Option<impl Iterator + 'a> {
-//         Some(self)
-//     }
-// }
-
-trait SequenceExt {
-    fn sequence<B: FromIterator<i32>>(self) -> Option<B>;
+// I don't know about this one
+trait SequenceExt<E> {
+    fn sequence<B: FromIterator<E>>(self) -> Option<B>;
 }
 
-impl<T: Iterator<Item = Option<i32>>> SequenceExt for T {
-    fn sequence<B: FromIterator<i32>>(mut self) -> Option<B> {
+impl<E: Sized, T: Iterator<Item = Option<E>>> SequenceExt<E> for T {
+    fn sequence<B: FromIterator<E>>(mut self) -> Option<B> {
         if self.all(|opt| opt.is_some()) {
-            return Some(B::from_iter(self.map(Option::unwrap)));
+            Some(B::from_iter(self.map(Option::unwrap)))
+        } else {
+            None
         }
-        None
     }
 }
 
 pub fn make_ast_token(tree: Tree) -> Result<(), Box<dyn Error>> {
     match tree {
         Tree::Branch(children) => {
-            let calls = children.iter().filter_map(|e| {
-                make_call(e).map_or_else(
-                    |err| {
-                        eprintln!("(error/nonfatal) {err}");
-                        None
-                    },
-                    |call| Some(call),
-                )
-            }).map(AstToken::codegen);
+            let calls: Vec<_> = children
+                .iter()
+                .filter_map(|e| {
+                    make_call(e).map_or_else(
+                        |err| {
+                            eprintln!("(error/nonfatal) {err}");
+                            None
+                        },
+                        |call| Some(call),
+                    )
+                })
+                .map(AstToken::codegen)
+                .map(Result::ok)
+                .sequence()
+                .ok_or("Codegen failed")?;
+                
+                println!("{calls:?}");
 
             Ok(())
         }
