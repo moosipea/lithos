@@ -67,4 +67,18 @@ impl Tree<'_> {
             }
         }
     }
+
+    pub fn branch(&self) -> Option<&[Tree]> {
+        match self {
+            Tree::Branch(children) => Some(children),
+            _ => None
+        }
+    }
+
+    pub fn leaf(&self) -> Option<&Symbol> {
+        match self {
+            Tree::Leaf(sym) => Some(sym),
+            _ => None
+        }
+    }
 }
