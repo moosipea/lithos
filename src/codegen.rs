@@ -28,10 +28,10 @@ impl AstToken<'_> {
                 let mut result = format!("// Calling '{name}' with args: {args:?}\n");
 
                 for (i, value) in args.iter().enumerate() {
-                    result.push_str(&format!("mov {reg}, {value}", reg = registers[i]));
+                    result.push_str(&format!("mov {reg}, {value}\n", reg = registers[i]));
                 }
 
-                result.push_str(&format!("call {name}"));
+                result.push_str(&format!("call {name}\n"));
 
                 Ok(result)
             }
@@ -82,25 +82,10 @@ fn make_call<'a>(tree: &'a Tree) -> Result<AstToken<'a>, Box<dyn Error>> {
     Ok(AstToken::Call { name, args })
 }
 
-// I don't know about this one
-trait SequenceExt<E> {
-    fn sequence<B: FromIterator<E>>(self) -> Option<B>;
-}
-
-impl<E: Sized, T: Iterator<Item = Option<E>>> SequenceExt<E> for T {
-    fn sequence<B: FromIterator<E>>(mut self) -> Option<B> {
-        if self.all(|opt| opt.is_some()) {
-            Some(B::from_iter(self.map(Option::unwrap)))
-        } else {
-            None
-        }
-    }
-}
-
 pub fn make_ast_token(tree: Tree) -> Result<(), Box<dyn Error>> {
     match tree {
         Tree::Branch(children) => {
-            let calls: Vec<_> = children
+            let calls = children
                 .iter()
                 .filter_map(|e| {
                     make_call(e).map_or_else(
@@ -112,11 +97,14 @@ pub fn make_ast_token(tree: Tree) -> Result<(), Box<dyn Error>> {
                     )
                 })
                 .map(AstToken::codegen)
-                .map(Result::ok)
-                .sequence()
-                .ok_or("Codegen failed")?;
+                .collect::<Vec<_>>();
                 
-                println!("{calls:?}");
+            for call in calls {
+                match call {
+                    Ok(code) => println!("{code}"),
+                    Err(err) => eprintln!("(error/nonfatal) during codegen: {err}"),
+                }
+            }
 
             Ok(())
         }
