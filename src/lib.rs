@@ -2,22 +2,8 @@ pub mod ast;
 pub mod lexer;
 pub mod codegen;
 
-#[derive(Debug, PartialEq)]
-pub enum Symbol<'a> {
-    Ident(&'a str),
-    Number(i32),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Token<'a> {
-    Open,
-    Close,
-    Symbol(Symbol<'a>),
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::ast::*;
     use crate::lexer::*;
 
