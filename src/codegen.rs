@@ -1,13 +1,46 @@
 use std::error::Error;
+use std::fmt::Display;
 
 use crate::ast::Tree;
 use crate::lexer::Symbol;
-// use crate::lexer::Token;
 
 #[derive(Debug)]
 pub enum Ast<'a> {
     NumberLiteral(i32),
     Call { name: &'a str, args: Vec<Ast<'a>> },
+}
+
+pub enum Value {
+    Signed32(i32),
+}
+
+impl Value {
+    fn is_true(&self) -> bool {
+        match self {
+            Self::Signed32(n) => *n != 0,
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Signed32(n) => write!(f, "{n}"),
+        }
+    }
+}
+
+fn arithmetic_op<F: FnMut(i32, i32) -> i32>(args: Vec<Ast>, op: F) -> Option<Value> {
+    let values = args.into_iter().map(Ast::eval).collect::<Vec<_>>();
+    let mut numbers = Vec::new();
+
+    for v in values {
+        match v {
+            Value::Signed32(n) => numbers.push(n),
+        }
+    }
+
+    Some(Value::Signed32(numbers.into_iter().reduce(op)?))
 }
 
 impl<'a> Ast<'a> {
@@ -18,41 +51,42 @@ impl<'a> Ast<'a> {
         }
     }
 
-    pub fn eval(self) -> i32 {
+    pub fn eval(self) -> Value {
         match self {
-            Ast::NumberLiteral(n) => n,
+            Ast::NumberLiteral(n) => Value::Signed32(n),
             Ast::Call { name, args } => {
                 if args.is_empty() {
                     panic!("Void function not supported");
                 }
 
+                // TODO: DRY
                 match name {
-                    "+" => args
-                        .into_iter()
-                        .map(Ast::eval)
-                        .reduce(|xs, x| xs + x)
-                        .expect("Operation failed"),
-                    "-" => args
-                        .into_iter()
-                        .map(Ast::eval)
-                        .reduce(|xs, x| xs - x)
-                        .expect("Operation failed"),
-                    "*" => args
-                        .into_iter()
-                        .map(Ast::eval)
-                        .reduce(|xs, x| xs * x)
-                        .expect("Operation failed"),
-                    "/" => args
-                        .into_iter()
-                        .map(Ast::eval)
-                        .reduce(|xs, x| xs / x)
-                        .expect("Operation failed"),
+                    // "+" => args
+                    //     .into_iter()
+                    //     .map(Ast::eval)
+                    //     .reduce(|xs, x| xs + x)
+                    //     .expect("Operation failed"),
+                    // "-" => args
+                    //     .into_iter()
+                    //     .map(Ast::eval)
+                    //     .reduce(|xs, x| xs - x)
+                    //     .expect("Operation failed"),
+                    // "*" => args
+                    //     .into_iter()
+                    //     .map(Ast::eval)
+                    //     .reduce(|xs, x| xs * x)
+                    //     .expect("Operation failed"),
+                    // "/" => args
+                    //     .into_iter()
+                    //     .map(Ast::eval)
+                    //     .reduce(|xs, x| xs / x)
+                    //     .expect("Operation failed"),
                     "echo" => {
                         for arg in args.into_iter().map(Ast::eval) {
                             print!("{arg} ");
                         }
                         print!("\n");
-                        0
+                        Value::Signed32(0)
                     }
                     "if-else" => {
                         if args.len() != 3 {
@@ -65,12 +99,16 @@ impl<'a> Ast<'a> {
                         let if_true = iargs.next().unwrap();
                         let if_false = iargs.next().unwrap();
 
-                        if cond != 0 {
+                        if cond.is_true() {
                             if_true.eval()
                         } else {
                             if_false.eval()
                         }
                     }
+                    "+" => arithmetic_op(args, i32::wrapping_add).expect("Operation failed"),
+                    "-" => arithmetic_op(args, i32::wrapping_sub).expect("Operation failed"),
+                    "*" => arithmetic_op(args, i32::wrapping_mul).expect("Operation failed"),
+                    "/" => arithmetic_op(args, i32::wrapping_div).expect("Operation failed"),
                     _ => panic!("Unknown function {name}"),
                 }
             }

@@ -19,8 +19,11 @@ fn main() -> Result<ExitCode, Box<dyn Error>> {
     match tree {
         Tree::Branch(children) => {
             let values = children.iter().map(Ast::from_tree).map(Ast::eval);
+            use rust_lisp_parser::codegen::Value;
             Ok(ExitCode::from(
-                values.last().ok_or("Evaluation failed")? as u8
+                match values.last().ok_or("Evaluation failed")? {
+                    Value::Signed32(n) => n as u8,
+                }
             ))
         }
         Tree::Leaf(leaf) => match leaf {
