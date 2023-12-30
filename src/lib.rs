@@ -127,7 +127,7 @@ mod tests {
 
         let tokens = lexer::lex(src)?;
         let tree = ast::Tree::try_construct(&tokens)?;
-        let ast = codegen::AstToken::from_tree(&tree);
+        let ast = codegen::Ast::from_tree(&tree);
 
         Ok(ast.eval())
     }

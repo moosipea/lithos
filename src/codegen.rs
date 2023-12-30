@@ -5,15 +5,15 @@ use crate::lexer::Symbol;
 // use crate::lexer::Token;
 
 #[derive(Debug)]
-pub enum AstToken<'a> {
+pub enum Ast<'a> {
     NumberLiteral(i32),
     Call {
         name: &'a str,
-        args: Vec<AstToken<'a>>,
+        args: Vec<Ast<'a>>,
     },
 }
 
-impl<'a> AstToken<'a> {
+impl<'a> Ast<'a> {
     pub fn from_tree(tree: &'a Tree) -> Self {
         match make_call(tree) {
             Ok(call) => call,
@@ -25,13 +25,13 @@ impl<'a> AstToken<'a> {
 
     pub fn eval(self) -> i32 {
         match self {
-            AstToken::NumberLiteral(n) => n,
-            AstToken::Call { name, args } => {
+            Ast::NumberLiteral(n) => n,
+            Ast::Call { name, args } => {
                 if args.is_empty() {
                     panic!("Void function not supported");
                 }
 
-                let evaluated_args = args.into_iter().map(AstToken::eval);
+                let evaluated_args = args.into_iter().map(Ast::eval);
 
                 match name {
                     "+" => evaluated_args
@@ -59,17 +59,17 @@ impl<'a> AstToken<'a> {
     }
 }
 
-fn make_number<'a>(tree: &'a Tree) -> Result<AstToken<'a>, Box<dyn Error>> {
+fn make_number<'a>(tree: &'a Tree) -> Result<Ast<'a>, Box<dyn Error>> {
     match tree {
         Tree::Leaf(leaf) => match leaf {
-            Symbol::Number(n) => Ok(AstToken::NumberLiteral(*n)),
+            Symbol::Number(n) => Ok(Ast::NumberLiteral(*n)),
             _ => Err("Expected Symbol::Number".into()),
         },
         _ => Err("Expected Tree::Leaf".into()),
     }
 }
 
-fn make_call<'a>(tree: &'a Tree) -> Result<AstToken<'a>, Box<dyn Error>> {
+fn make_call<'a>(tree: &'a Tree) -> Result<Ast<'a>, Box<dyn Error>> {
     let branch = tree
         .branch()
         .ok_or(format!("Expected Tree::Branch, got {tree:?}"))?;
@@ -85,9 +85,9 @@ fn make_call<'a>(tree: &'a Tree) -> Result<AstToken<'a>, Box<dyn Error>> {
     };
 
     let args = match branch.get(1..) {
-        Some(rst) => rst.into_iter().map(AstToken::from_tree).collect(),
+        Some(rst) => rst.into_iter().map(Ast::from_tree).collect(),
         None => Vec::new(),
     };
 
-    Ok(AstToken::Call { name, args })
+    Ok(Ast::Call { name, args })
 }

@@ -4,7 +4,7 @@ use std::fs::read_to_string;
 use std::process::ExitCode;
 
 use rust_lisp_parser::ast::Tree;
-use rust_lisp_parser::codegen::AstToken;
+use rust_lisp_parser::codegen::Ast;
 use rust_lisp_parser::lexer::lex;
 use rust_lisp_parser::lexer::Symbol;
 
@@ -18,7 +18,7 @@ fn main() -> Result<ExitCode, Box<dyn Error>> {
 
     match tree {
         Tree::Branch(children) => {
-            let values = children.iter().map(AstToken::from_tree).map(AstToken::eval);
+            let values = children.iter().map(Ast::from_tree).map(Ast::eval);
             Ok(ExitCode::from(
                 values.last().ok_or("Evaluation failed")? as u8
             ))
