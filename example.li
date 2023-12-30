@@ -1,3 +1,6 @@
 ; This is an example program
 
-(echo (+ 34 35))
+(if-else
+  (- 50 (* 25 2))
+    (echo 1)
+	(echo 0))

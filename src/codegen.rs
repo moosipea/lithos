@@ -7,19 +7,14 @@ use crate::lexer::Symbol;
 #[derive(Debug)]
 pub enum Ast<'a> {
     NumberLiteral(i32),
-    Call {
-        name: &'a str,
-        args: Vec<Ast<'a>>,
-    },
+    Call { name: &'a str, args: Vec<Ast<'a>> },
 }
 
 impl<'a> Ast<'a> {
     pub fn from_tree(tree: &'a Tree) -> Self {
         match make_call(tree) {
             Ok(call) => call,
-            Err(_) => {
-                make_number(tree).expect("Expected to construct number literal")
-            }
+            Err(_) => make_number(tree).expect("Expected to construct number literal"),
         }
     }
 
@@ -31,26 +26,50 @@ impl<'a> Ast<'a> {
                     panic!("Void function not supported");
                 }
 
-                let evaluated_args = args.into_iter().map(Ast::eval);
-
                 match name {
-                    "+" => evaluated_args
+                    "+" => args
+                        .into_iter()
+                        .map(Ast::eval)
                         .reduce(|xs, x| xs + x)
                         .expect("Operation failed"),
-                    "-" => evaluated_args
+                    "-" => args
+                        .into_iter()
+                        .map(Ast::eval)
                         .reduce(|xs, x| xs - x)
                         .expect("Operation failed"),
-                    "*" => evaluated_args
+                    "*" => args
+                        .into_iter()
+                        .map(Ast::eval)
                         .reduce(|xs, x| xs * x)
                         .expect("Operation failed"),
-                    "/" => evaluated_args
+                    "/" => args
+                        .into_iter()
+                        .map(Ast::eval)
                         .reduce(|xs, x| xs / x)
                         .expect("Operation failed"),
                     "echo" => {
-                        for arg in evaluated_args {
+                        for arg in args.into_iter().map(Ast::eval) {
                             print!("{arg} ");
                         }
+                        print!("\n");
                         0
+                    }
+                    "if-else" => {
+                        if args.len() != 3 {
+                            panic!("Expected 3 arguments, got {}", args.len());
+                        }
+
+                        // TODO: clean up
+                        let mut iargs = args.into_iter();
+                        let cond = iargs.next().unwrap().eval();
+                        let if_true = iargs.next().unwrap();
+                        let if_false = iargs.next().unwrap();
+
+                        if cond != 0 {
+                            if_true.eval()
+                        } else {
+                            if_false.eval()
+                        }
                     }
                     _ => panic!("Unknown function {name}"),
                 }
