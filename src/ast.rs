@@ -1,5 +1,6 @@
 use std::error::Error;
-use super::*;
+use crate::lexer::Symbol;
+use crate::lexer::Token;
 
 fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>]), Box<dyn Error>> {
     match toks[0] {

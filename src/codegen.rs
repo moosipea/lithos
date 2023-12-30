@@ -1,7 +1,8 @@
 use std::error::Error;
 
 use crate::ast::Tree;
-use crate::Symbol;
+use crate::lexer::Symbol;
+use crate::lexer::Token;
 
 #[derive(Debug)]
 enum AstToken<'a> {
