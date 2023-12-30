@@ -2,5 +2,5 @@
 
 (if-else
   (- 50 (* 25 2))
-    (echo 1)
-	(echo 0))
+    (echo "The value is nonzero")
+	(echo "The value is zero"))

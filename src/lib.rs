@@ -122,7 +122,8 @@ mod tests {
     }
 
     use std::error::Error;
-    fn interpert<'a>(src: &'a str) -> Result<i32, Box<dyn Error>> {
+    use crate::codegen::Value;
+    fn interpert<'a>(src: &'a str) -> Result<Value, Box<dyn Error>> {
         use crate::*;
 
         let tokens = lexer::lex(src)?;
@@ -135,10 +136,10 @@ mod tests {
     #[test]
     fn operations() {
         let pairs = &[
-            ("+ (+ 1 2)", 3),
-            ("+ (- 10 4)", 6),
-            ("+ (* 6 7)", 42),
-            ("+ (/ 16 2)", 8),
+            ("(+ 1 2)", Value::Signed32(3)),
+            ("(- 10 4)", Value::Signed32(6)),
+            ("(* 6 7)",  Value::Signed32(2)),
+            ("(/ 16 2)", Value::Signed32(8)),
         ];
 
         for (sample, expected) in pairs {

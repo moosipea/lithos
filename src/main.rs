@@ -23,6 +23,7 @@ fn main() -> Result<ExitCode, Box<dyn Error>> {
             Ok(ExitCode::from(
                 match values.last().ok_or("Evaluation failed")? {
                     Value::Signed32(n) => n as u8,
+                    _ => 1u8 // TODO
                 }
             ))
         }
