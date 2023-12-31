@@ -76,7 +76,8 @@ fn builtin_if_else<'a>(args: impl Iterator<Item = Ast<'a>>, ctx: &mut Context) -
     }
 }
 
-// (let <name> <value>)
+// (let <ident> <expr> <rst>)
+// where rst is the expr where <ident> is a valid var
 fn builtin_define_variable<'a>(
     mut args: impl Iterator<Item = Ast<'a>>,
     ctx: &mut Context,
@@ -86,11 +87,10 @@ fn builtin_define_variable<'a>(
         _ => panic!("Expected identifier"),
     };
     let value = args.next().unwrap().eval(ctx);
-    ctx.scope_variables.insert(ident, value.clone());
-
-    println!("VARS: {:?}", &ctx.scope_variables);
-
-    value
+    ctx.scope_variables.insert(ident.clone(), value.clone());
+    let ret = args.next().unwrap().eval(ctx);
+    ctx.scope_variables.remove(&ident);
+    ret
 }
 
 struct Function {}
