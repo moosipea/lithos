@@ -1,0 +1,8 @@
+; Variable demo
+; Actually id like to use 'let' ... 'in' syntax
+; or something like that
+
+(let foo 42)
+(echo (+ foo 1))
+(echo (+ foo 2))
+(echo (+ foo 3))

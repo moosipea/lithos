@@ -8,10 +8,11 @@ use crate::lexer::Symbol;
 pub enum Ast<'a> {
     NumberLiteral(i32),
     StringLiteral(String),
+    Identifier(String),
     Call { name: &'a str, args: Vec<Ast<'a>> },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Signed32(i32),
     String(String),
@@ -35,8 +36,12 @@ impl Display for Value {
     }
 }
 
-fn arithmetic_op<F: FnMut(i32, i32) -> i32>(args: Vec<Ast>, op: F) -> Option<Value> {
-    let values = args.into_iter().map(Ast::eval).collect::<Vec<_>>();
+fn arithmetic_op<F: FnMut(i32, i32) -> i32>(
+    args: Vec<Ast>,
+    ctx: &mut Context,
+    op: F,
+) -> Option<Value> {
+    let values = args.into_iter().map(|a| a.eval(ctx)).collect::<Vec<_>>();
     let mut numbers = Vec::new();
 
     for v in values {
@@ -49,26 +54,53 @@ fn arithmetic_op<F: FnMut(i32, i32) -> i32>(args: Vec<Ast>, op: F) -> Option<Val
     Some(Value::Signed32(numbers.into_iter().reduce(op)?))
 }
 
-fn builtin_echo<'a>(args: impl Iterator<Item = Ast<'a>>) -> Value {
-    for arg in args.map(Ast::eval) {
+fn builtin_echo<'a>(args: impl Iterator<Item = Ast<'a>>, ctx: &mut Context) -> Value {
+    for arg in args.map(|arg| arg.eval(ctx)) {
         print!("{} ", arg);
     }
     print!("\n");
     Value::Signed32(0)
 }
 
-fn builtin_if_else<'a>(args: impl Iterator<Item = Ast<'a>>) -> Value {
+fn builtin_if_else<'a>(args: impl Iterator<Item = Ast<'a>>, ctx: &mut Context) -> Value {
     // TODO: Clean up
     let mut iargs = args.into_iter();
-    let cond = iargs.next().unwrap().eval();
+    let cond = iargs.next().unwrap().eval(ctx);
     let if_true = iargs.next().unwrap();
     let if_false = iargs.next().unwrap();
 
     if cond.is_true() {
-        if_true.eval()
+        if_true.eval(ctx)
     } else {
-        if_false.eval()
+        if_false.eval(ctx)
     }
+}
+
+// (let <name> <value>)
+fn builtin_define_variable<'a>(
+    mut args: impl Iterator<Item = Ast<'a>>,
+    ctx: &mut Context,
+) -> Value {
+    let ident = match args.next().unwrap() {
+        Ast::Identifier(i) => i,
+        _ => panic!("Expected identifier"),
+    };
+    let value = args.next().unwrap().eval(ctx);
+    ctx.scope_variables.insert(ident, value.clone());
+
+    println!("VARS: {:?}", &ctx.scope_variables);
+
+    value
+}
+
+struct Function {}
+
+use std::collections::HashMap;
+
+#[derive(Default)]
+pub struct Context {
+    _functions: HashMap<String, Function>,
+    scope_variables: HashMap<String, Value>,
 }
 
 impl<'a> Ast<'a> {
@@ -79,21 +111,27 @@ impl<'a> Ast<'a> {
         }
     }
 
-    pub fn eval(self) -> Value {
+    pub fn eval(self, ctx: &mut Context) -> Value {
         match self {
             Ast::NumberLiteral(n) => Value::Signed32(n),
             Ast::StringLiteral(s) => Value::String(s),
+            Ast::Identifier(ident) => ctx
+                .scope_variables
+                .get(&ident)
+                .expect("Unknown Identifier")
+                .clone(),
             Ast::Call { name, args } => {
                 if args.is_empty() {
                     panic!("Void function not supported");
                 }
                 match name {
-                    "echo" => builtin_echo(args.into_iter()),
-                    "if-else" => builtin_if_else(args.into_iter()),
-                    "+" => arithmetic_op(args, i32::wrapping_add).expect("Operation failed"),
-                    "-" => arithmetic_op(args, i32::wrapping_sub).expect("Operation failed"),
-                    "*" => arithmetic_op(args, i32::wrapping_mul).expect("Operation failed"),
-                    "/" => arithmetic_op(args, i32::wrapping_div).expect("Operation failed"),
+                    "echo" => builtin_echo(args.into_iter(), ctx),
+                    "if-else" => builtin_if_else(args.into_iter(), ctx),
+                    "let" => builtin_define_variable(args.into_iter(), ctx),
+                    "+" => arithmetic_op(args, ctx, i32::wrapping_add).expect("Operation failed"),
+                    "-" => arithmetic_op(args, ctx, i32::wrapping_sub).expect("Operation failed"),
+                    "*" => arithmetic_op(args, ctx, i32::wrapping_mul).expect("Operation failed"),
+                    "/" => arithmetic_op(args, ctx, i32::wrapping_div).expect("Operation failed"),
                     _ => panic!("Unknown function {name}"),
                 }
             }
@@ -106,7 +144,7 @@ fn ast_from_leaf<'a>(tree: &'a Tree) -> Result<Ast<'a>, Box<dyn Error>> {
         Tree::Leaf(leaf) => match leaf {
             Symbol::Number(n) => Ok(Ast::NumberLiteral(*n)),
             Symbol::StringLiteral(s) => Ok(Ast::StringLiteral(s.to_string())),
-            _ => Err("Expected Symbol::Number".into()),
+            Symbol::Ident(ident) => Ok(Ast::Identifier(ident.to_string())),
         },
         _ => Err("Expected Tree::Leaf".into()),
     }

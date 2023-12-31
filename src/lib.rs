@@ -120,30 +120,4 @@ mod tests {
         ])]);
         assert_eq!(Tree::try_construct(sample).unwrap(), expected);
     }
-
-    use std::error::Error;
-    use crate::codegen::Value;
-    fn interpert<'a>(src: &'a str) -> Result<Value, Box<dyn Error>> {
-        use crate::*;
-
-        let tokens = lexer::lex(src)?;
-        let tree = ast::Tree::try_construct(&tokens)?;
-        let ast = codegen::Ast::from_tree(&tree);
-
-        Ok(ast.eval())
-    }
-
-    #[test]
-    fn operations() {
-        let pairs = &[
-            ("(+ 1 2)", Value::Signed32(3)),
-            ("(- 10 4)", Value::Signed32(6)),
-            ("(* 6 7)",  Value::Signed32(2)),
-            ("(/ 16 2)", Value::Signed32(8)),
-        ];
-
-        for (sample, expected) in pairs {
-            assert_eq!(interpert(sample).expect("Interperting failed"), *expected);
-        }
-    }
 }

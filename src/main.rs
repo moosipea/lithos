@@ -5,6 +5,7 @@ use std::process::ExitCode;
 
 use rust_lisp_parser::ast::Tree;
 use rust_lisp_parser::codegen::Ast;
+use rust_lisp_parser::codegen::Context;
 use rust_lisp_parser::lexer::lex;
 use rust_lisp_parser::lexer::Symbol;
 
@@ -16,9 +17,11 @@ fn main() -> Result<ExitCode, Box<dyn Error>> {
     let tokens = lex(&content)?;
     let tree = Tree::try_construct(&tokens)?;
 
+    let mut ctx = Context::default();
+
     match tree {
         Tree::Branch(children) => {
-            let values = children.iter().map(Ast::from_tree).map(Ast::eval);
+            let values = children.iter().map(Ast::from_tree).map(|e| e.eval(&mut ctx));
             use rust_lisp_parser::codegen::Value;
             Ok(ExitCode::from(
                 match values.last().ok_or("Evaluation failed")? {
