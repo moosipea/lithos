@@ -2,6 +2,18 @@ pub mod ast;
 pub mod codegen;
 pub mod lexer;
 
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Expected {0} args, got {1}")]
+    UnexpectedArgN(usize, usize),
+    #[error("Expected {0}")]
+    Expected(&'static str),
+    #[error("Unknown function: {0}")]
+    UnknownFunction(String),
+    #[error("Unimplemented: {0}")]
+    Unimplemented(&'static str),
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::*;

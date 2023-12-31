@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use rust_lisp_parser::ast::Tree;
 use rust_lisp_parser::codegen::Ast;
 use rust_lisp_parser::codegen::Context;
+use rust_lisp_parser::codegen::Value;
 use rust_lisp_parser::lexer::lex;
 use rust_lisp_parser::lexer::Symbol;
 
@@ -21,13 +22,15 @@ fn main() -> Result<ExitCode, Box<dyn Error>> {
 
     match tree {
         Tree::Branch(children) => {
-            let values = children.iter().map(Ast::from_tree).map(|e| e.eval(&mut ctx));
-            use rust_lisp_parser::codegen::Value;
+            let values = children
+                .iter()
+                .map(|child| Ast::from_tree(child).unwrap())
+                .map(|e| e.eval(&mut ctx).unwrap());
             Ok(ExitCode::from(
                 match values.last().ok_or("Evaluation failed")? {
                     Value::Signed32(n) => n as u8,
-                    _ => 1u8 // TODO
-                }
+                    _ => 1u8, // TODO
+                },
             ))
         }
         Tree::Leaf(leaf) => match leaf {
