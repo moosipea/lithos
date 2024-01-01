@@ -1,10 +1,13 @@
 use crate::ast::Tree;
 use crate::lexer::Symbol;
 use crate::Error;
-use anyhow::Result;
+
+use std::collections::HashMap;
 use std::fmt::Display;
 
-#[derive(Debug)]
+use anyhow::Result;
+
+#[derive(Debug, Clone)]
 pub enum Ast<'a> {
     NumberLiteral(i32),
     StringLiteral(String),
@@ -16,6 +19,8 @@ pub enum Ast<'a> {
 pub enum Value {
     Signed32(i32),
     String(String),
+    List(Vec<Value>),
+    Ident(String),
 }
 
 impl Value {
@@ -32,13 +37,20 @@ impl Display for Value {
         match self {
             Self::Signed32(n) => write!(f, "{n}"),
             Self::String(s) => write!(f, "{s}"),
+            // TODO: clean up
+            Self::List(elements) => write!(
+                f,
+                "({})",
+                elements.iter().map(|e| format!("{e} ")).collect::<String>()
+            ),
+            Self::Ident(ident) => write!(f, "{ident}"),
         }
     }
 }
 
-fn arithmetic_op<F: FnMut(i32, i32) -> i32>(
-    args: Vec<Ast>,
-    ctx: &mut Context,
+fn arithmetic_op<'a, F: FnMut(i32, i32) -> i32>(
+    args: Vec<Ast<'a>>,
+    ctx: &mut Context<'a>,
     op: F,
 ) -> Result<Value> {
     let values = args.into_iter().map(|a| a.eval(ctx)).collect::<Vec<_>>();
@@ -59,7 +71,7 @@ fn arithmetic_op<F: FnMut(i32, i32) -> i32>(
     ))
 }
 
-fn builtin_echo<'a>(args: impl Iterator<Item = Ast<'a>>, ctx: &mut Context) -> Result<Value> {
+fn builtin_echo<'a>(args: impl Iterator<Item = Ast<'a>>, ctx: &mut Context<'a>) -> Result<Value> {
     for arg in args {
         let arg = arg.eval(ctx)?;
         print!("{} ", arg);
@@ -70,7 +82,7 @@ fn builtin_echo<'a>(args: impl Iterator<Item = Ast<'a>>, ctx: &mut Context) -> R
 
 fn builtin_if_else<'a>(
     mut args: impl Iterator<Item = Ast<'a>>,
-    ctx: &mut Context,
+    ctx: &mut Context<'a>,
 ) -> Result<Value> {
     let cond = args.next().ok_or(Error::UnexpectedArgN(3, 0))?.eval(ctx)?;
     let if_true = args.next().ok_or(Error::UnexpectedArgN(3, 1))?;
@@ -85,7 +97,7 @@ fn builtin_if_else<'a>(
 
 fn builtin_define_variable<'a>(
     mut args: impl Iterator<Item = Ast<'a>>,
-    ctx: &mut Context,
+    ctx: &mut Context<'a>,
 ) -> Result<Value> {
     let ident = match args.next().ok_or(Error::UnexpectedArgN(3, 0))? {
         Ast::Identifier(i) => i,
@@ -98,13 +110,116 @@ fn builtin_define_variable<'a>(
     ret
 }
 
-struct Function {}
+pub struct FunctionDefinition<'a> {
+    ast: Ast<'a>,
+    args: Vec<String>,
+}
 
-use std::collections::HashMap;
+fn builtin_define_function<'a>(
+    mut args: impl Iterator<Item = Ast<'a>>,
+    ctx: &mut Context<'a>,
+) -> Result<Value> {
+    let name = match args.next().ok_or(Error::UnexpectedArgN(3, 0))? {
+        Ast::Identifier(ident) => ident,
+        _ => return Err(Error::Expected("Ast::Identifier").into()),
+    };
+
+    let fn_args = match args.next().ok_or(Error::UnexpectedArgN(3, 1))?.eval(ctx)? {
+        Value::List(list) => list
+            .iter()
+            .cloned()
+            .map(|e| match e {
+                Value::Ident(ident) => Some(ident),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>(),
+        _ => return Err(Error::Expected("Value::List").into()),
+    }
+    .ok_or(Error::Expected("all arguments to be identifiers"))?;
+
+    let body = args.next().ok_or(Error::UnexpectedArgN(3, 2))?;
+
+    ctx.functions.insert(
+        name.clone(),
+        FunctionDefinition {
+            ast: body,
+            args: fn_args,
+        },
+    );
+
+    Ok(Value::String(name))
+}
+
+fn builtin_make_list<'a>(
+    args: impl Iterator<Item = Ast<'a>>,
+    ctx: &mut Context<'a>,
+) -> Result<Value> {
+    let values: Result<_> = args.map(|a| a.eval(ctx)).collect();
+    Ok(Value::List(values?))
+}
+
+fn bultin_equality<'a>(
+    args: impl Iterator<Item = Ast<'a>>,
+    ctx: &mut Context<'a>,
+) -> Result<Value> {
+    // FIXME
+    let evaluated: Result<Vec<_>> = args.map(|arg| arg.eval(ctx)).collect();
+    let numbers = evaluated?
+        .into_iter()
+        .map(|value| match value {
+            Value::Signed32(n) => Some(n),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or(Error::Expected("all arguments to be Signed32"))?;
+
+    if numbers.len() < 2 {
+        return Err(Error::Expected("at least 2 arguments").into());
+    }
+
+    // FIXME
+    Ok(
+        match numbers.windows(2).map(|xs| xs[0] == xs[1]).all(|x| x) {
+            true => Value::Signed32(1),
+            false => Value::Signed32(0),
+        },
+    )
+}
+
+fn call_user_function<'a>(
+    name: &str,
+    args: impl Iterator<Item = Ast<'a>>,
+    ctx: &mut Context<'a>,
+) -> Result<Value> {
+    let args: Vec<_> = args.collect();
+    match ctx.functions.get(name) {
+        Some(func) => {
+            let n_args = args.len();
+            let n_expected = func.args.len();
+            if n_args != n_expected {
+                return Err(Error::UnexpectedArgN(n_expected, n_args).into());
+            }
+
+            let function = func.ast.clone();
+            let prev_state = ctx.scope_variables.clone();
+
+            for (arg, ast) in func.args.clone().into_iter().zip(args) {
+                let value = ast.eval(ctx)?;
+                ctx.scope_variables.insert(arg, value);
+            }
+
+            let ret = function.eval(ctx);
+            ctx.scope_variables = prev_state;
+
+            ret
+        }
+        None => Err(Error::UnknownFunction(name.to_string()).into()),
+    }
+}
 
 #[derive(Default)]
-pub struct Context {
-    _functions: HashMap<String, Function>,
+pub struct Context<'a> {
+    functions: HashMap<String, FunctionDefinition<'a>>,
     scope_variables: HashMap<String, Value>,
 }
 
@@ -116,28 +231,31 @@ impl<'a> Ast<'a> {
         }
     }
 
-    pub fn eval(self, ctx: &mut Context) -> Result<Value> {
+    pub fn eval(self, ctx: &mut Context<'a>) -> Result<Value> {
         match self {
             Ast::NumberLiteral(n) => Ok(Value::Signed32(n)),
             Ast::StringLiteral(s) => Ok(Value::String(s)),
-            Ast::Identifier(ident) => Ok(ctx
-                .scope_variables
-                .get(&ident)
-                .expect("Unknown Identifier")
-                .clone()),
+            // FIXME
+            Ast::Identifier(ident) => Ok(match ctx.scope_variables.get(&ident) {
+                Some(value) => value.clone(),
+                None => Value::Ident(ident),
+            }),
             Ast::Call { name, args } => {
                 if args.is_empty() {
-                    return Err(Error::Unimplemented("void functions").into());
+                    return Err(Error::Unimplemented("functions with no arguments").into());
                 }
                 match name {
                     "echo" => builtin_echo(args.into_iter(), ctx),
                     "if-else" => builtin_if_else(args.into_iter(), ctx),
                     "let" => builtin_define_variable(args.into_iter(), ctx),
+                    "fn" => builtin_define_function(args.into_iter(), ctx),
+                    "_" => builtin_make_list(args.into_iter(), ctx),
                     "+" => arithmetic_op(args, ctx, i32::wrapping_add),
                     "-" => arithmetic_op(args, ctx, i32::wrapping_sub),
                     "*" => arithmetic_op(args, ctx, i32::wrapping_mul),
                     "/" => arithmetic_op(args, ctx, i32::wrapping_div),
-                    _ => Err(Error::UnknownFunction(name.to_string()).into()),
+                    "=" => bultin_equality(args.into_iter(), ctx),
+                    _ => call_user_function(name, args.into_iter(), ctx),
                 }
             }
         }

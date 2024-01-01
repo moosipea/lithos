@@ -1,7 +1,0 @@
-; Variable demo
-; Actually id like to use 'let' ... 'in' syntax
-; or something like that
-
-(echo
-  (let a 60
-    (* 7 a)))

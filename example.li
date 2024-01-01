@@ -1,6 +1,8 @@
 ; This is an example program
 
-(if-else
-  (- 50 (* 25 2))
-    (echo "The value is nonzero")
-	(echo "The value is zero"))
+(fn factorial (_ n)
+  (if-else (= n 0)
+	1
+    (* n (factorial (- n 1)))))
+
+(echo (factorial 5))

@@ -1,6 +1,6 @@
-use std::error::Error;
 use crate::lexer::Symbol;
 use crate::lexer::Token;
+use std::error::Error;
 
 fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>]), Box<dyn Error>> {
     match toks[0] {
@@ -72,14 +72,14 @@ impl Tree<'_> {
     pub fn branch(&self) -> Option<&[Tree]> {
         match self {
             Tree::Branch(children) => Some(children),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn leaf(&self) -> Option<&Symbol> {
         match self {
             Tree::Leaf(sym) => Some(sym),
-            _ => None
+            _ => None,
         }
     }
 }
