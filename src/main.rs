@@ -1,37 +1,44 @@
 use std::env;
-use std::error::Error;
 use std::fs::read_to_string;
 use std::process::ExitCode;
 
 use rust_lisp_parser::ast::Tree;
-use rust_lisp_parser::simulator::Ast;
-use rust_lisp_parser::simulator::Context;
-use rust_lisp_parser::simulator::Value;
 use rust_lisp_parser::lexer::lex;
 use rust_lisp_parser::lexer::Symbol;
+use rust_lisp_parser::simulator::Ast;
 
-fn main() -> Result<ExitCode, Box<dyn Error>> {
+use anyhow::Result;
+use rust_lisp_parser::Error;
+
+fn main() -> Result<ExitCode> {
     let mut args = env::args();
-    let path = args.nth(1).ok_or("Not enough args")?;
+    let path = args.nth(1).ok_or(Error::UnexpectedArgN(2, 1))?;
     let content = read_to_string(path)?;
 
     let tokens = lex(&content)?;
     let tree = Tree::try_construct(&tokens)?;
 
-    let mut ctx = Context::default();
-
     match tree {
         Tree::Branch(children) => {
-            let values = children
+            // Probably too much collecting righte?
+            let bytecode = children
                 .iter()
-                .map(|child| Ast::from_tree(child).unwrap())
-                .map(|e| e.eval(&mut ctx).unwrap());
-            Ok(ExitCode::from(
-                match values.last().ok_or("Evaluation failed")? {
-                    Value::Signed32(n) => n as u8,
-                    _ => 1u8, // TODO
-                },
-            ))
+                .map(Ast::from_tree)
+                .collect::<Result<Vec<_>>>()?
+                .iter()
+                .map(Ast::generate)
+                .collect::<Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+
+            for instruction in &bytecode {
+                println!("{instruction:?}");
+            }
+
+            rust_lisp_parser::run(bytecode)?;
+
+            Ok(ExitCode::from(0)) // TODO
         }
         Tree::Leaf(leaf) => match leaf {
             Symbol::Number(n) => Ok(ExitCode::from(*n as u8)),

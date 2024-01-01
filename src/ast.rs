@@ -1,8 +1,9 @@
 use crate::lexer::Symbol;
 use crate::lexer::Token;
-use std::error::Error;
+use anyhow::Result;
+use crate::Error;
 
-fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>]), Box<dyn Error>> {
+fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>])> {
     match toks[0] {
         Token::Symbol(_) => Ok((&toks[0..1], &toks[1..])),
         Token::Open => {
@@ -17,15 +18,15 @@ fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>])
                     return Ok((&toks[0..i + 1], &toks[i + 1..]));
                 }
             }
-            Err("Unmatched '('".into())
+            Err(Error::UnmatchedOpenExpr.into())
         }
-        _ => Err("Expected '(' or symbol".into()),
+        _ => Err(Error::Expected("( or symbol)").into()),
     }
 }
 
-fn take_toplevel_exprs<'a>(toks: &'a [Token]) -> Result<Vec<&'a [Token<'a>]>, Box<dyn Error>> {
+fn take_toplevel_exprs<'a>(toks: &'a [Token]) -> Result<Vec<&'a [Token<'a>]>> {
     if toks.is_empty() {
-        return Err("Empty list".into());
+        return Err(Error::Expected("nonempty list").into());
     }
 
     let mut exprs = Vec::new();
@@ -52,7 +53,7 @@ pub enum Tree<'a> {
 }
 
 impl Tree<'_> {
-    pub fn try_construct<'a>(toks: &'a [Token]) -> Result<Tree<'a>, Box<dyn Error>> {
+    pub fn try_construct<'a>(toks: &'a [Token]) -> Result<Tree<'a>> {
         match toks {
             [Token::Symbol(sym)] => Ok(Tree::Leaf(sym)),
             _ => {

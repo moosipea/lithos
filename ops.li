@@ -1,0 +1,6 @@
+; Operations demo (for bytecode)
+; Right now only two operands are supported
+(+ 1 2)
+(- 10 7)
+(* 3 4)
+(/ 12 4)

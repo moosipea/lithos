@@ -1,4 +1,5 @@
-use std::error::Error;
+use crate::Error;
+use anyhow::Result;
 
 #[derive(Debug, PartialEq)]
 pub enum Symbol<'a> {
@@ -57,7 +58,7 @@ impl Lexer<'_> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, Box<dyn Error>>;
+    type Item = Result<Token<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let first = self.src.chars().next()?;
@@ -67,14 +68,14 @@ impl<'a> Iterator for Lexer<'a> {
                     self.src = &self.src[len..];
                     self.next()
                 }
-                None => Some(Err("Trailing whitespace".into())),
+                None => Some(Err(Error::TrailingWhitespace.into())),
             },
             ';' => match self.end(|c| c == '\n') {
                 Some(len) => {
                     self.src = &self.src[len..];
                     self.next()
                 }
-                None => Some(Err("Undelimited comment".into())),
+                None => Some(Err(Error::UndelimitedComment.into())),
             },
             '(' => {
                 self.column += 1;
@@ -92,7 +93,7 @@ impl<'a> Iterator for Lexer<'a> {
                     self.src = &self.src[len + 1..];
                     Some(Ok(Token::Symbol(literal)))
                 }
-                None => Some(Err("Undelimited string literal".into())),
+                None => Some(Err(Error::UndelimitedString.into())),
             },
             _ => match self.end(|c| c.is_whitespace() || c == '(' || c == ')') {
                 Some(len) => {
@@ -104,13 +105,13 @@ impl<'a> Iterator for Lexer<'a> {
                         _ => Symbol::Ident(sym),
                     })))
                 }
-                None => Some(Err("Undelimited symbol?".into())),
+                None => Some(Err(Error::Expected("delimited symbol?").into())),
             },
         }
     }
 }
 
-pub fn lex(src: &str) -> Result<Vec<Token>, Box<dyn Error>> {
+pub fn lex(src: &str) -> Result<Vec<Token>> {
     let lexer = Lexer::new(src);
     let mut tokens = Vec::new();
     for maybe in lexer {

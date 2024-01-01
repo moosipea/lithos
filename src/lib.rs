@@ -2,6 +2,9 @@ pub mod ast;
 pub mod simulator;
 pub mod lexer;
 
+use simulator::Instruction;
+use anyhow::Result;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Expected {0} args, got {1}")]
@@ -12,6 +15,29 @@ pub enum Error {
     UnknownFunction(String),
     #[error("Unimplemented: {0}")]
     Unimplemented(&'static str),
+    #[error("Code generation failed")]
+    CodegenFailed,
+    #[error("Trailing whitespace")]
+    TrailingWhitespace,
+    #[error("Undelimited comment")]
+    UndelimitedComment,
+    #[error("Undelimited string")]
+    UndelimitedString,
+    #[error("Unmatched '('")]
+    UnmatchedOpenExpr,
+}
+
+pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
+    let mut stack = Vec::new();
+
+    for instruction in bytecode {
+        match instruction {
+            Instruction::Load(value) => stack.push(value),
+            Instruction::Operation(op) => op.eval(&mut stack)?,
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
