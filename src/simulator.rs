@@ -22,14 +22,6 @@ pub enum Value {
     // Ident(String),
 }
 
-impl Value {
-    fn signed32(&self) -> Option<i32> {
-        match self {
-            Value::Signed32(n) => Some(*n),
-        }
-    }
-}
-
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -49,24 +41,31 @@ pub enum Op {
 pub type Stack = Vec<Value>;
 
 impl Op {
-    pub fn eval(&self, stack: &mut Stack) -> Result<()> {
-        let a = stack
-            .pop()
-            .ok_or(Error::UnexpectedArgN(2, 0))?
-            .signed32()
-            .ok_or(Error::Expected("number"))?;
-        let b = stack
-            .pop()
-            .ok_or(Error::UnexpectedArgN(2, 1))?
-            .signed32()
-            .ok_or(Error::Expected("number"))?;
+    pub fn eval(&self, arg_count: usize, stack: &mut Stack) -> Result<()> {
+        let values = (1..=arg_count)
+            .map(|i| {
+                stack
+                    .pop()
+                    .ok_or(Error::UnexpectedArgN(arg_count, i).into())
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .map(|value| match value {
+                Value::Signed32(n) => Ok(n),
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-        let result = match self {
-            Op::Add => a + b,
-            Op::Sub => a - b,
-            Op::Mul => a * b,
-            Op::Div => a / b,
+        let op = match self {
+            Op::Add => i32::wrapping_add,
+            Op::Sub => i32::wrapping_sub,
+            Op::Mul => i32::wrapping_mul,
+            Op::Div => i32::wrapping_div,
         };
+
+        let result = values
+            .into_iter()
+            .reduce(op)
+            .ok_or(Error::Expected(".reduce() not to fail"))?;
 
         stack.push(Value::Signed32(result));
 
@@ -98,7 +97,7 @@ impl std::fmt::Debug for Function {
 #[derive(Debug)]
 pub enum Instruction {
     Load(Value),
-    Operation(Op),
+    Operation(Op, usize),
     Call(Function),
     ReadVar(String),
     StoreVar(String),
@@ -122,10 +121,10 @@ fn builtin_echo(stack: &mut Stack) -> Result<()> {
 
 fn match_call(name: &str, args: &[Ast]) -> Result<Instruction> {
     Ok(match name {
-        "+" => Instruction::Operation(Op::Add),
-        "-" => Instruction::Operation(Op::Sub),
-        "*" => Instruction::Operation(Op::Mul),
-        "/" => Instruction::Operation(Op::Div),
+        "+" => Instruction::Operation(Op::Add, args.len()),
+        "-" => Instruction::Operation(Op::Sub, args.len()),
+        "*" => Instruction::Operation(Op::Mul, args.len()),
+        "/" => Instruction::Operation(Op::Div, args.len()),
         "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
         "let" => Instruction::StoreVar(match &args[0] {
             Ast::Identifier(ident) => ident.to_string(),
@@ -228,12 +227,13 @@ pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
     let mut stack = Stack::new();
 
     let mut variables = HashMap::<String, Value>::new();
+    // let mut functions = HashMap::<String, Function>::new();
     // TODO: functions
 
     for instruction in bytecode {
         match instruction {
             Instruction::Load(value) => stack.push(value),
-            Instruction::Operation(op) => op.eval(&mut stack)?,
+            Instruction::Operation(op, arg_count) => op.eval(arg_count, &mut stack)?,
             Instruction::Call(func) => func.eval(&mut stack)?,
             Instruction::ReadVar(name) => {
                 stack.push(variables.get(&name).expect("Unknown variable").clone())

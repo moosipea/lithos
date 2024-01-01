@@ -1,7 +1,7 @@
 use crate::lexer::Symbol;
 use crate::lexer::Token;
-use anyhow::Result;
 use crate::Error;
+use anyhow::Result;
 
 fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>])> {
     match toks[0] {

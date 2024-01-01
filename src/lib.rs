@@ -2,14 +2,6 @@ pub mod ast;
 pub mod lexer;
 pub mod simulator;
 
-use std::collections::HashMap;
-
-use simulator::Instruction;
-use simulator::Stack;
-use simulator::Value;
-
-use anyhow::Result;
-
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Expected {0} args, got {1}")]
