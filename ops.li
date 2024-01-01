@@ -1,4 +1,3 @@
-(fn add (a b)
-  (+ a b))
+(fn factorial ( n ) n)
 
-(echo (add 34 35))
+(echo (factorial 5))

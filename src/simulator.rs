@@ -262,6 +262,7 @@ impl<'a> Ast<'a> {
                 }
                 Some(accum)
             }
+            Self::Identifier(ident) => Some(vec![ident.to_string()]),
             _ => None,
         }
     }
