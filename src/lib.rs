@@ -1,5 +1,5 @@
 pub mod ast;
-pub mod codegen;
+pub mod simulator;
 pub mod lexer;
 
 #[derive(thiserror::Error, Debug)]

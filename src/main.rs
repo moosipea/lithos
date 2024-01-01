@@ -4,9 +4,9 @@ use std::fs::read_to_string;
 use std::process::ExitCode;
 
 use rust_lisp_parser::ast::Tree;
-use rust_lisp_parser::codegen::Ast;
-use rust_lisp_parser::codegen::Context;
-use rust_lisp_parser::codegen::Value;
+use rust_lisp_parser::simulator::Ast;
+use rust_lisp_parser::simulator::Context;
+use rust_lisp_parser::simulator::Value;
 use rust_lisp_parser::lexer::lex;
 use rust_lisp_parser::lexer::Symbol;
 
