@@ -1,6 +1,6 @@
 # Lithos
 Because I like fancy Greek names. It is not actually Turing Complete yet, as I need to
-add branching. Also, function are complete trash atm.
+add branching. Also, functions are complete trash atm.
 
 ## Example program
 ```
