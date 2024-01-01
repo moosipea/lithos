@@ -1,4 +1,4 @@
 ; Variables demo
 
-(let K 500
-  (echo (- K 80)))
+(let K 7
+  (echo (* K K)))

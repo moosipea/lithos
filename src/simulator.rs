@@ -1,6 +1,9 @@
 use crate::ast::Tree;
 use crate::lexer::Symbol;
 use crate::Error;
+
+use std::collections::HashMap;
+
 use anyhow::Result;
 
 #[derive(Debug, Clone)]
@@ -219,4 +222,30 @@ fn ast_from_branch<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
     }?;
 
     Ok(Ast::Call { name, args })
+}
+
+pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
+    let mut stack = Stack::new();
+
+    let mut variables = HashMap::<String, Value>::new();
+    // TODO: functions
+
+    for instruction in bytecode {
+        match instruction {
+            Instruction::Load(value) => stack.push(value),
+            Instruction::Operation(op) => op.eval(&mut stack)?,
+            Instruction::Call(func) => func.eval(&mut stack)?,
+            Instruction::ReadVar(name) => {
+                stack.push(variables.get(&name).expect("Unknown variable").clone())
+            }
+            Instruction::StoreVar(name) => {
+                variables.insert(name, stack.pop().ok_or(Error::Expected("nonempty stack"))?);
+            }
+            Instruction::ForgetVar(name) => {
+                variables.remove(&name);
+            }
+        }
+    }
+
+    Ok(())
 }

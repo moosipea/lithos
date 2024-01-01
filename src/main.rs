@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use rust_lisp_parser::ast::Tree;
 use rust_lisp_parser::lexer::lex;
 use rust_lisp_parser::lexer::Symbol;
+use rust_lisp_parser::simulator::run;
 use rust_lisp_parser::simulator::Ast;
 
 use anyhow::Result;
@@ -20,7 +21,7 @@ fn main() -> Result<ExitCode> {
 
     match tree {
         Tree::Branch(children) => {
-            // Probably too much collecting righte?
+            // Probably too much collecting rite?
             let bytecode = children
                 .iter()
                 .map(Ast::from_tree)
@@ -36,7 +37,7 @@ fn main() -> Result<ExitCode> {
                 println!("{instruction:?}");
             }
 
-            rust_lisp_parser::run(bytecode)?;
+            run(bytecode)?;
 
             Ok(ExitCode::from(0)) // TODO
         }

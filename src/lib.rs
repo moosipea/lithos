@@ -32,33 +32,6 @@ pub enum Error {
     UnmatchedOpenExpr,
 }
 
-pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
-    let mut stack = Stack::new();
-
-    // TODO: variables
-    let mut variables = HashMap::<String, Value>::new();
-    variables.insert("N".to_string(), Value::Signed32(420));
-
-    for instruction in bytecode {
-        match instruction {
-            Instruction::Load(value) => stack.push(value),
-            Instruction::Operation(op) => op.eval(&mut stack)?,
-            Instruction::Call(func) => func.eval(&mut stack)?,
-            Instruction::ReadVar(name) => {
-                stack.push(variables.get(&name).expect("Unknown variable").clone())
-            }
-            Instruction::StoreVar(name) => {
-                variables.insert(name, stack.pop().ok_or(Error::Expected("nonempty stack"))?);
-            }
-            Instruction::ForgetVar(name) => {
-                variables.remove(&name);
-            }
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use crate::ast::*;
