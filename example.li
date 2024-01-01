@@ -1,8 +1,0 @@
-; This small example program prints the factorial of 10
-
-(fn factorial (_ n)
-  (if-else (= n 0)
-	1
-    (* n (factorial (- n 1)))))
-
-(echo (factorial 10))

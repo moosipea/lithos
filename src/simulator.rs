@@ -17,9 +17,6 @@ pub enum Ast<'a> {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Signed32(i32),
-    // String(String),
-    // List(Vec<Value>),
-    // Ident(String),
 }
 
 impl std::fmt::Display for Value {
@@ -30,7 +27,7 @@ impl std::fmt::Display for Value {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Op {
     Add,
     Sub,
@@ -73,6 +70,7 @@ impl Op {
     }
 }
 
+#[derive(Clone)]
 pub enum Function {
     Builtin {
         name: String,
@@ -86,12 +84,31 @@ pub enum Function {
 }
 
 impl Function {
-    pub fn eval(&self, stack: &mut Stack) -> Result<()> {
+    pub fn eval(
+        &self,
+        stack: &mut Stack,
+        variables: &mut Variables,
+        functions: &mut Functions,
+    ) -> Result<()> {
         match self {
             Function::Builtin { inner, .. } => inner(stack),
             Function::User { args, bytecode, .. } => {
-                todo!()
+                // FIXME
+                let prev_state = variables.clone();
+                for (i, arg) in args.into_iter().rev().enumerate() {
+                    let value = stack.pop().ok_or(Error::UnexpectedArgN(args.len(), i))?;
+                    variables.insert(arg.to_string(), value);
+                }
+                interpert(&bytecode, stack, variables, functions)?;
+                *variables = prev_state;
+                Ok(())
             }
+        }
+    }
+    fn name(&self) -> &str {
+        match self {
+            Function::Builtin { name, .. } => name,
+            Function::User { name, .. } => name,
         }
     }
 }
@@ -105,7 +122,7 @@ impl std::fmt::Debug for Function {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     Load(Value),
     Operation(Op, usize),
@@ -114,7 +131,6 @@ pub enum Instruction {
     StoreVar(String),
     ForgetVar(String),
     DefineFunction(Function),
-    DefineFunction2(String),
 }
 
 impl Instruction {
@@ -132,6 +148,30 @@ fn builtin_echo(stack: &mut Stack) -> Result<()> {
     Ok(())
 }
 
+fn create_user_function(args: &[Ast]) -> Result<Instruction> {
+    let mut args = args.into_iter();
+    let name = args
+        .next()
+        .ok_or(Error::UnexpectedArgN(3, 0))?
+        .ident()
+        .ok_or(Error::Expected("identifier"))?
+        .to_string();
+
+    let fn_args = args
+        .next()
+        .ok_or(Error::UnexpectedArgN(3, 1))?
+        .call_list()
+        .ok_or(Error::Expected("all arguments to be identifiers"))?;
+
+    let body = args.next().ok_or(Error::UnexpectedArgN(3, 2))?.generate()?;
+
+    Ok(Instruction::DefineFunction(Function::User {
+        name: name.clone(),
+        args: fn_args,
+        bytecode: body,
+    }))
+}
+
 fn match_call<'a>(name: &'a str, args: &'a [Ast]) -> Result<Instruction> {
     Ok(match name {
         "+" => Instruction::Operation(Op::Add, args.len()),
@@ -142,23 +182,7 @@ fn match_call<'a>(name: &'a str, args: &'a [Ast]) -> Result<Instruction> {
             Ast::Identifier(ident) => ident.to_string(),
             _ => return Err(Error::Expected("identifier").into()),
         }),
-        // (fn <name> (<args>) <body>)
-        // "fn" => {
-        //     let mut args = args.into_iter();
-        //     let name = args
-        //         .next()
-        //         .ok_or(Error::UnexpectedArgN(3, 0))?
-        //         .ident()
-        //         .ok_or(Error::Expected("identifier"))?;
-
-        //     let fn_args = args
-        //         .next()
-        //         .ok_or(Error::UnexpectedArgN(3, 1))?
-        //         .call_list()
-        //         .ok_or(Error::Expected("all arguments to be identifiers"))?;
-
-        //     todo!()
-        // }
+        "fn" => create_user_function(args)?,
         _ => Instruction::Call(name.to_string()),
     })
 }
@@ -174,14 +198,6 @@ fn push_let_in(
     instructions.extend(args[2].generate()?); // Push Expression
     instructions.push(Instruction::ForgetVar(name)); // Forget the variable
     Ok(())
-}
-
-fn push_function_def(
-    instruction: Instruction,
-    args: &[Ast],
-    instructions: &mut Vec<Instruction>,
-) -> Result<()> {
-    todo!()
 }
 
 fn push_normal_instruction(
@@ -201,7 +217,7 @@ fn make_call(name: &str, args: &[Ast], instructions: &mut Vec<Instruction>) -> R
     let instruction = match_call(name, args)?;
     match instruction {
         Instruction::StoreVar(_) => push_let_in(instruction, args, instructions)?,
-        Instruction::DefineFunction(_) => push_function_def(instruction, args, instructions)?,
+        Instruction::DefineFunction(_) => instructions.push(instruction),
         _ => push_normal_instruction(instruction, args, instructions)?,
     }
 
@@ -283,11 +299,7 @@ fn ast_from_branch<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
     Ok(Ast::Call { name, args })
 }
 
-fn register_builtin(
-    functions: &mut HashMap<String, Function>,
-    name: &str,
-    f: fn(&mut Stack) -> Result<()>,
-) {
+fn register_builtin(functions: &mut Functions, name: &str, f: fn(&mut Stack) -> Result<()>) {
     functions.insert(
         name.to_string(),
         Function::Builtin {
@@ -297,35 +309,53 @@ fn register_builtin(
     );
 }
 
+type Functions = HashMap<String, Function>;
+type Variables = HashMap<String, Value>;
+
+fn interpert(
+    bytecode: &[Instruction],
+    stack: &mut Stack,
+    variables: &mut Variables,
+    functions: &mut Functions,
+) -> Result<()> {
+    for instruction in bytecode {
+        match instruction {
+            Instruction::Load(value) => stack.push(value.clone()),
+            Instruction::Operation(op, arg_count) => op.eval(*arg_count, stack)?,
+            Instruction::Call(func_name) => {
+                let f = functions
+                    .get(func_name)
+                    .cloned() // AAGGH this defeats the whole point
+                    .ok_or(Error::UnknownFunction(func_name.to_string()))?;
+                f.eval(stack, variables, functions)?;
+            }
+            Instruction::ReadVar(name) => {
+                stack.push(variables.get(name).expect("Unknown variable").clone())
+            }
+            Instruction::StoreVar(name) => {
+                variables.insert(
+                    name.to_string(),
+                    stack.pop().ok_or(Error::Expected("nonempty stack"))?,
+                );
+            }
+            Instruction::ForgetVar(name) => {
+                variables.remove(name);
+            }
+            Instruction::DefineFunction(func) => {
+                functions.insert(func.name().to_string(), func.clone());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
     let mut stack = Stack::new();
 
-    let mut variables = HashMap::<String, Value>::new();
-    let mut functions = HashMap::<String, Function>::new();
+    let mut variables = Variables::new();
+    let mut functions = Functions::new();
 
     register_builtin(&mut functions, "echo", builtin_echo);
 
-    for instruction in bytecode {
-        match instruction {
-            Instruction::Load(value) => stack.push(value),
-            Instruction::Operation(op, arg_count) => op.eval(arg_count, &mut stack)?,
-            Instruction::Call(func_name) => functions
-                .get(&func_name)
-                .ok_or(Error::UnknownFunction(func_name))?
-                .eval(&mut stack)?,
-            Instruction::ReadVar(name) => {
-                stack.push(variables.get(&name).expect("Unknown variable").clone())
-            }
-            Instruction::StoreVar(name) => {
-                variables.insert(name, stack.pop().ok_or(Error::Expected("nonempty stack"))?);
-            }
-            Instruction::ForgetVar(name) => {
-                variables.remove(&name);
-            }
-            Instruction::DefineFunction(_) => todo!(),
-            _ => panic!()
-        }
-    }
-
-    Ok(())
+    interpert(&bytecode, &mut stack, &mut variables, &mut functions)
 }
