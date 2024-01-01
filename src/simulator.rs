@@ -117,6 +117,58 @@ fn builtin_echo(stack: &mut Stack) -> Result<()> {
     Ok(())
 }
 
+fn match_call(name: &str, args: &[Ast]) -> Result<Instruction> {
+    Ok(match name {
+        "+" => Instruction::Operation(Op::Add),
+        "-" => Instruction::Operation(Op::Sub),
+        "*" => Instruction::Operation(Op::Mul),
+        "/" => Instruction::Operation(Op::Div),
+        "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
+        "let" => Instruction::StoreVar(match &args[0] {
+            Ast::Identifier(ident) => ident.to_string(),
+            _ => return Err(Error::Expected("identifier").into()),
+        }),
+        _ => return Err(Error::Unimplemented("function").into()),
+    })
+}
+
+fn push_let_in(
+    instruction: Instruction,
+    args: &[Ast],
+    instructions: &mut Vec<Instruction>,
+) -> Result<()> {
+    let name = instruction.store_var().unwrap().to_string();
+    instructions.extend(args[1].generate()?); // Push variable value
+    instructions.push(instruction); // Push Store
+    instructions.extend(args[2].generate()?); // Push Expression
+    instructions.push(Instruction::ForgetVar(name)); // Forget the variable
+    Ok(())
+}
+
+fn push_normal_instruction(
+    instruction: Instruction,
+    args: &[Ast],
+    instructions: &mut Vec<Instruction>,
+) -> Result<()> {
+    // TODO: pass arg count
+    for arg in args.into_iter().rev() {
+        let bytecode = arg.generate()?;
+        instructions.extend(bytecode);
+    }
+    instructions.push(instruction);
+    Ok(())
+}
+
+fn make_call(name: &str, args: &[Ast], instructions: &mut Vec<Instruction>) -> Result<()> {
+    let instruction = match_call(name, args)?;
+    match instruction {
+        Instruction::StoreVar(_) => push_let_in(instruction, args, instructions)?,
+        _ => push_normal_instruction(instruction, args, instructions)?,
+    }
+
+    Ok(())
+}
+
 impl<'a> Ast<'a> {
     pub fn from_tree(tree: &'a Tree) -> Result<Self> {
         match tree {
@@ -130,41 +182,7 @@ impl<'a> Ast<'a> {
         match self {
             Ast::NumberLiteral(n) => instructions.push(Instruction::Load(Value::Signed32(*n))),
             Ast::Identifier(ident) => instructions.push(Instruction::ReadVar(ident.clone())),
-            Ast::Call { name, args } => {
-                // TODO:
-                // (let <ident> <value> <in>)
-                let instruction = match *name {
-                    "+" => Instruction::Operation(Op::Add),
-                    "-" => Instruction::Operation(Op::Sub),
-                    "*" => Instruction::Operation(Op::Mul),
-                    "/" => Instruction::Operation(Op::Div),
-                    "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
-                    "let" => Instruction::StoreVar(match &args[0] {
-                        Ast::Identifier(ident) => ident.to_string(),
-                        _ => return Err(Error::Expected("identifier").into()),
-                    }),
-                    _ => return Err(Error::Unimplemented("function").into()),
-                };
-
-                match instruction {
-                    Instruction::StoreVar(_) => {
-                        // not amazing
-                        let name = instruction.store_var().unwrap().to_string();
-                        instructions.extend(args[1].generate()?); // Push variable value
-                        instructions.push(instruction); // Push Store
-                        instructions.extend(args[2].generate()?); // Push Expression
-                        instructions.push(Instruction::ForgetVar(name)); // Forget the variable
-                    }
-                    _ => {
-                        // TODO: pass arg count
-                        for arg in args.into_iter().rev() {
-                            let bytecode = arg.generate()?;
-                            instructions.extend(bytecode);
-                        }
-                        instructions.push(instruction)
-                    }
-                }
-            }
+            Ast::Call { name, args } => make_call(name, args, &mut instructions)?,
             _ => return Err(Error::Unimplemented("ast variant").into()),
         }
         Ok(instructions)
