@@ -1,4 +1,4 @@
-; Operations demo (for bytecode)
-; Right now only two operands are supported
-(echo (+ 34 35))
-(echo N)
+; Variables demo
+
+(let K 500
+  (echo (- K 80)))

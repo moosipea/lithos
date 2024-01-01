@@ -97,7 +97,18 @@ pub enum Instruction {
     Load(Value),
     Operation(Op),
     Call(Function),
-    ReadVar(String)
+    ReadVar(String),
+    StoreVar(String),
+    ForgetVar(String),
+}
+
+impl Instruction {
+    fn store_var(&self) -> Option<&str> {
+        match self {
+            Self::StoreVar(s) => Some(s),
+            _ => None,
+        }
+    }
 }
 
 fn builtin_echo(stack: &mut Stack) -> Result<()> {
@@ -120,24 +131,39 @@ impl<'a> Ast<'a> {
             Ast::NumberLiteral(n) => instructions.push(Instruction::Load(Value::Signed32(*n))),
             Ast::Identifier(ident) => instructions.push(Instruction::ReadVar(ident.clone())),
             Ast::Call { name, args } => {
-                // TODO: pass arg count
-                for arg in args.into_iter().rev() {
-                    let bytecode = arg.generate()?;
-                    instructions.extend(bytecode);
-                }
-
+                // TODO:
+                // (let <ident> <value> <in>)
                 let instruction = match *name {
                     "+" => Instruction::Operation(Op::Add),
                     "-" => Instruction::Operation(Op::Sub),
                     "*" => Instruction::Operation(Op::Mul),
                     "/" => Instruction::Operation(Op::Div),
-                    _ => match *name {
-                        "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
-                        _ => return Err(Error::Unimplemented("function").into()),
-                    },
+                    "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
+                    "let" => Instruction::StoreVar(match &args[0] {
+                        Ast::Identifier(ident) => ident.to_string(),
+                        _ => return Err(Error::Expected("identifier").into()),
+                    }),
+                    _ => return Err(Error::Unimplemented("function").into()),
                 };
 
-                instructions.push(instruction)
+                match instruction {
+                    Instruction::StoreVar(_) => {
+                        // not amazing
+                        let name = instruction.store_var().unwrap().to_string();
+                        instructions.extend(args[1].generate()?); // Push variable value
+                        instructions.push(instruction); // Push Store
+                        instructions.extend(args[2].generate()?); // Push Expression
+                        instructions.push(Instruction::ForgetVar(name)); // Forget the variable
+                    }
+                    _ => {
+                        // TODO: pass arg count
+                        for arg in args.into_iter().rev() {
+                            let bytecode = arg.generate()?;
+                            instructions.extend(bytecode);
+                        }
+                        instructions.push(instruction)
+                    }
+                }
             }
             _ => return Err(Error::Unimplemented("ast variant").into()),
         }

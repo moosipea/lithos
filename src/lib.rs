@@ -47,6 +47,12 @@ pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
             Instruction::ReadVar(name) => {
                 stack.push(variables.get(&name).expect("Unknown variable").clone())
             }
+            Instruction::StoreVar(name) => {
+                variables.insert(name, stack.pop().ok_or(Error::Expected("nonempty stack"))?);
+            }
+            Instruction::ForgetVar(name) => {
+                variables.remove(&name);
+            }
         }
     }
 
