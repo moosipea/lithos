@@ -1,16 +1,12 @@
 # Lithos
-Because I like fancy Greek names.
-I am not sure if it is actually Turing Complete.
+Because I like fancy Greek names. It is not actually Turing Complete yet, as I need to
+add branching. Also, function are complete trash atm.
 
 ## Example program
 ```
-; This small example program prints the factorial of 10
+; This is a small example program that prints the square of 16
+(fn square n
+  (* n n))
 
-(fn factorial (_ n)
-  (if-else (= n 0)
-	1
-    (* n (factorial (- n 1)))))
-
-(echo (factorial 10))
-
+(echo (square 16))
 ```

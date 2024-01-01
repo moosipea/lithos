@@ -1,3 +1,5 @@
-(fn factorial ( n ) n)
+; This is a small example program that prints the square of 16
+(fn square n
+  (* n n))
 
-(echo (factorial 5))
+(echo (square 16))
