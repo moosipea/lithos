@@ -74,14 +74,24 @@ impl Op {
 }
 
 pub enum Function {
-    Builtin(Box<dyn Fn(&mut Stack) -> Result<()>>),
-    // User,
+    Builtin {
+        name: String,
+        inner: fn(&mut Stack) -> Result<()>,
+    },
+    User {
+        name: String,
+        args: Vec<String>,
+        bytecode: Vec<Instruction>,
+    },
 }
 
 impl Function {
     pub fn eval(&self, stack: &mut Stack) -> Result<()> {
         match self {
-            Function::Builtin(inner) => inner(stack),
+            Function::Builtin { inner, .. } => inner(stack),
+            Function::User { args, bytecode, .. } => {
+                todo!()
+            }
         }
     }
 }
@@ -89,7 +99,8 @@ impl Function {
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Function::Builtin(_) => write!(f, "Function::Builtin(...)"),
+            Function::Builtin { name, .. } => write!(f, "Builtin function '{name}'"),
+            Function::User { name, .. } => write!(f, "User-defined function '{name}'"),
         }
     }
 }
@@ -98,10 +109,12 @@ impl std::fmt::Debug for Function {
 pub enum Instruction {
     Load(Value),
     Operation(Op, usize),
-    Call(Function),
+    Call(String),
     ReadVar(String),
     StoreVar(String),
     ForgetVar(String),
+    DefineFunction(Function),
+    DefineFunction2(String),
 }
 
 impl Instruction {
@@ -119,18 +132,34 @@ fn builtin_echo(stack: &mut Stack) -> Result<()> {
     Ok(())
 }
 
-fn match_call(name: &str, args: &[Ast]) -> Result<Instruction> {
+fn match_call<'a>(name: &'a str, args: &'a [Ast]) -> Result<Instruction> {
     Ok(match name {
         "+" => Instruction::Operation(Op::Add, args.len()),
         "-" => Instruction::Operation(Op::Sub, args.len()),
         "*" => Instruction::Operation(Op::Mul, args.len()),
         "/" => Instruction::Operation(Op::Div, args.len()),
-        "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
         "let" => Instruction::StoreVar(match &args[0] {
             Ast::Identifier(ident) => ident.to_string(),
             _ => return Err(Error::Expected("identifier").into()),
         }),
-        _ => return Err(Error::Unimplemented("function").into()),
+        // (fn <name> (<args>) <body>)
+        // "fn" => {
+        //     let mut args = args.into_iter();
+        //     let name = args
+        //         .next()
+        //         .ok_or(Error::UnexpectedArgN(3, 0))?
+        //         .ident()
+        //         .ok_or(Error::Expected("identifier"))?;
+
+        //     let fn_args = args
+        //         .next()
+        //         .ok_or(Error::UnexpectedArgN(3, 1))?
+        //         .call_list()
+        //         .ok_or(Error::Expected("all arguments to be identifiers"))?;
+
+        //     todo!()
+        // }
+        _ => Instruction::Call(name.to_string()),
     })
 }
 
@@ -147,12 +176,19 @@ fn push_let_in(
     Ok(())
 }
 
+fn push_function_def(
+    instruction: Instruction,
+    args: &[Ast],
+    instructions: &mut Vec<Instruction>,
+) -> Result<()> {
+    todo!()
+}
+
 fn push_normal_instruction(
     instruction: Instruction,
     args: &[Ast],
     instructions: &mut Vec<Instruction>,
 ) -> Result<()> {
-    // TODO: pass arg count
     for arg in args.into_iter().rev() {
         let bytecode = arg.generate()?;
         instructions.extend(bytecode);
@@ -165,6 +201,7 @@ fn make_call(name: &str, args: &[Ast], instructions: &mut Vec<Instruction>) -> R
     let instruction = match_call(name, args)?;
     match instruction {
         Instruction::StoreVar(_) => push_let_in(instruction, args, instructions)?,
+        Instruction::DefineFunction(_) => push_function_def(instruction, args, instructions)?,
         _ => push_normal_instruction(instruction, args, instructions)?,
     }
 
@@ -188,6 +225,29 @@ impl<'a> Ast<'a> {
             _ => return Err(Error::Unimplemented("ast variant").into()),
         }
         Ok(instructions)
+    }
+
+    fn ident(&self) -> Option<&str> {
+        match self {
+            Self::Identifier(ident) => Some(ident),
+            _ => None,
+        }
+    }
+
+    fn call_list(&self) -> Option<Vec<String>> {
+        match self {
+            Self::Call { name, args } => {
+                let mut accum = vec![name.to_string()];
+                for arg in args {
+                    match arg {
+                        Self::Identifier(ident) => accum.push(ident.to_string()),
+                        _ => return None,
+                    }
+                }
+                Some(accum)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -223,18 +283,36 @@ fn ast_from_branch<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
     Ok(Ast::Call { name, args })
 }
 
+fn register_builtin(
+    functions: &mut HashMap<String, Function>,
+    name: &str,
+    f: fn(&mut Stack) -> Result<()>,
+) {
+    functions.insert(
+        name.to_string(),
+        Function::Builtin {
+            name: name.to_string(),
+            inner: f,
+        },
+    );
+}
+
 pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
     let mut stack = Stack::new();
 
     let mut variables = HashMap::<String, Value>::new();
-    // let mut functions = HashMap::<String, Function>::new();
-    // TODO: functions
+    let mut functions = HashMap::<String, Function>::new();
+
+    register_builtin(&mut functions, "echo", builtin_echo);
 
     for instruction in bytecode {
         match instruction {
             Instruction::Load(value) => stack.push(value),
             Instruction::Operation(op, arg_count) => op.eval(arg_count, &mut stack)?,
-            Instruction::Call(func) => func.eval(&mut stack)?,
+            Instruction::Call(func_name) => functions
+                .get(&func_name)
+                .ok_or(Error::UnknownFunction(func_name))?
+                .eval(&mut stack)?,
             Instruction::ReadVar(name) => {
                 stack.push(variables.get(&name).expect("Unknown variable").clone())
             }
@@ -244,6 +322,8 @@ pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
             Instruction::ForgetVar(name) => {
                 variables.remove(&name);
             }
+            Instruction::DefineFunction(_) => todo!(),
+            _ => panic!()
         }
     }
 
