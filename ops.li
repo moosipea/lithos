@@ -1,3 +1,4 @@
 ; Operations demo (for bytecode)
 ; Right now only two operands are supported
 (echo (+ 34 35))
+(echo N)

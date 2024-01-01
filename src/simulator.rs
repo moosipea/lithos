@@ -43,7 +43,7 @@ pub enum Op {
     Div,
 }
 
-type Stack = Vec<Value>;
+pub type Stack = Vec<Value>;
 
 impl Op {
     pub fn eval(&self, stack: &mut Stack) -> Result<()> {
@@ -87,7 +87,7 @@ impl Function {
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Function::Builtin(_) => write!(f, "Function(Builtin(...))"),
+            Function::Builtin(_) => write!(f, "Function::Builtin(...)"),
         }
     }
 }
@@ -97,6 +97,7 @@ pub enum Instruction {
     Load(Value),
     Operation(Op),
     Call(Function),
+    ReadVar(String)
 }
 
 fn builtin_echo(stack: &mut Stack) -> Result<()> {
@@ -117,6 +118,7 @@ impl<'a> Ast<'a> {
         let mut instructions = Vec::new();
         match self {
             Ast::NumberLiteral(n) => instructions.push(Instruction::Load(Value::Signed32(*n))),
+            Ast::Identifier(ident) => instructions.push(Instruction::ReadVar(ident.clone())),
             Ast::Call { name, args } => {
                 // TODO: pass arg count
                 for arg in args.into_iter().rev() {

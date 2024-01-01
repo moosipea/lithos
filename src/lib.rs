@@ -1,8 +1,13 @@
 pub mod ast;
-pub mod simulator;
 pub mod lexer;
+pub mod simulator;
+
+use std::collections::HashMap;
 
 use simulator::Instruction;
+use simulator::Stack;
+use simulator::Value;
+
 use anyhow::Result;
 
 #[derive(thiserror::Error, Debug)]
@@ -28,13 +33,20 @@ pub enum Error {
 }
 
 pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
-    let mut stack = Vec::new();
+    let mut stack = Stack::new();
+
+    // TODO: variables
+    let mut variables = HashMap::<String, Value>::new();
+    variables.insert("N".to_string(), Value::Signed32(420));
 
     for instruction in bytecode {
         match instruction {
             Instruction::Load(value) => stack.push(value),
             Instruction::Operation(op) => op.eval(&mut stack)?,
             Instruction::Call(func) => func.eval(&mut stack)?,
+            Instruction::ReadVar(name) => {
+                stack.push(variables.get(&name).expect("Unknown variable").clone())
+            }
         }
     }
 
