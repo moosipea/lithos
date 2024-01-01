@@ -27,6 +27,14 @@ impl Value {
     }
 }
 
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Signed32(n) => write!(f, "{}", *n),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Op {
     Add,
@@ -57,11 +65,30 @@ impl Op {
             Op::Div => a / b,
         };
 
-        println!("{result}");
-
         stack.push(Value::Signed32(result));
 
         Ok(())
+    }
+}
+
+pub enum Function {
+    Builtin(Box<dyn Fn(&mut Stack) -> Result<()>>),
+    // User,
+}
+
+impl Function {
+    pub fn eval(&self, stack: &mut Stack) -> Result<()> {
+        match self {
+            Function::Builtin(inner) => inner(stack),
+        }
+    }
+}
+
+impl std::fmt::Debug for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::Builtin(_) => write!(f, "Function(Builtin(...))"),
+        }
     }
 }
 
@@ -69,6 +96,13 @@ impl Op {
 pub enum Instruction {
     Load(Value),
     Operation(Op),
+    Call(Function),
+}
+
+fn builtin_echo(stack: &mut Stack) -> Result<()> {
+    let a = stack.pop().ok_or(Error::UnexpectedArgN(1, 0))?;
+    println!("{}", a);
+    Ok(())
 }
 
 impl<'a> Ast<'a> {
@@ -84,20 +118,24 @@ impl<'a> Ast<'a> {
         match self {
             Ast::NumberLiteral(n) => instructions.push(Instruction::Load(Value::Signed32(*n))),
             Ast::Call { name, args } => {
+                // TODO: pass arg count
                 for arg in args.into_iter().rev() {
                     let bytecode = arg.generate()?;
                     instructions.extend(bytecode);
                 }
 
-                let op = match *name {
-                    "+" => Op::Add,
-                    "-" => Op::Sub,
-                    "*" => Op::Mul,
-                    "/" => Op::Div,
-                    _ => return Err(Error::Unimplemented("operator").into()),
+                let instruction = match *name {
+                    "+" => Instruction::Operation(Op::Add),
+                    "-" => Instruction::Operation(Op::Sub),
+                    "*" => Instruction::Operation(Op::Mul),
+                    "/" => Instruction::Operation(Op::Div),
+                    _ => match *name {
+                        "echo" => Instruction::Call(Function::Builtin(Box::new(builtin_echo))),
+                        _ => return Err(Error::Unimplemented("function").into()),
+                    },
                 };
 
-                instructions.push(Instruction::Operation(op))
+                instructions.push(instruction)
             }
             _ => return Err(Error::Unimplemented("ast variant").into()),
         }

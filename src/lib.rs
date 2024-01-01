@@ -34,6 +34,7 @@ pub fn run(bytecode: Vec<Instruction>) -> Result<()> {
         match instruction {
             Instruction::Load(value) => stack.push(value),
             Instruction::Operation(op) => op.eval(&mut stack)?,
+            Instruction::Call(func) => func.eval(&mut stack)?,
         }
     }
 
