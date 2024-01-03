@@ -60,6 +60,8 @@ impl Op {
 pub enum Instruction {
     Push(Value),
     Operator(Op, usize),
+    Jump(usize),
+    Dump,
     Halt,
 }
 
@@ -93,6 +95,10 @@ impl Interperter<'_> {
 
         Ok(accum.into_boxed_slice())
     }
+
+    fn pop(&mut self) -> Result<Value> {
+        self.stack.pop().ok_or(Error::UnexpectedArgN(1, 0).into())
+    }
 }
 
 pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
@@ -108,12 +114,16 @@ pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
             Instruction::Operator(operator, argc) => {
                 let value = operator.compute(ctx.popn(argc)?)?;
                 ctx.push(value);
-            }
+            },
+            Instruction::Jump(addr) => ctx.addr = addr,
+            Instruction::Dump => println!("{}", ctx.pop()?),
             Instruction::Halt => break,
         }
-    }
 
-    dbg!(ctx.stack);
+        use std::thread;
+        use std::time::Duration;
+        thread::sleep(Duration::from_millis(100));
+    }
 
     Ok(())
 }

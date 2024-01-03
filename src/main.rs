@@ -9,8 +9,8 @@ fn main() -> Result<ExitCode> {
         Push(U64(34)),
         Push(U64(35)),
         Operator(Op::Add, 2),
-        Push(U64(420)),
-        Operator(Op::Mul, 2)
+        Dump,
+        Jump(0)
     ];
     run(code, 0)?;
     Ok(ExitCode::SUCCESS)
