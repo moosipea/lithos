@@ -4,7 +4,7 @@ use anyhow::Result;
 #[derive(Debug, PartialEq)]
 pub enum Symbol<'a> {
     Ident(&'a str),
-    Number(i32),
+    Number(u64),
     StringLiteral(&'a str),
 }
 
@@ -31,15 +31,8 @@ impl<'a> Lexer<'a> {
     }
 }
 
-// Need to support
-// 1. Open/Close
-// 2. Identifiers
-// 3. Number literals
-// 4. String literals (!)
-
 impl Lexer<'_> {
     fn end<F: Fn(char) -> bool>(&mut self, when: F) -> Option<usize> {
-        // for (i, c) in (1..).zip(self.src.chars()) {
         for (i, c) in self.src.chars().enumerate().skip(1) {
             match c {
                 '\n' => {
@@ -100,7 +93,7 @@ impl<'a> Iterator for Lexer<'a> {
                     let sym = &self.src[..len];
                     self.src = &self.src[len..];
 
-                    Some(Ok(Token::Symbol(match sym.parse::<i32>() {
+                    Some(Ok(Token::Symbol(match sym.parse::<u64>() {
                         Ok(num) => Symbol::Number(num),
                         _ => Symbol::Ident(sym),
                     })))

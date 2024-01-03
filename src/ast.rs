@@ -84,3 +84,52 @@ impl Tree<'_> {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum Ast<'a> {
+    NumberLiteral(u64),
+    StringLiteral(String),
+    Identifier(String),
+    Call { name: &'a str, args: Vec<Ast<'a>> },
+}
+
+impl<'a> Ast<'a> {
+    pub fn from_tree(tree: &'a Tree) -> Result<Self> {
+        match tree {
+            Tree::Branch(_) => ast_from_branch(tree),
+            Tree::Leaf(_) => ast_from_leaf(tree),
+        }
+    }
+}
+
+fn ast_from_leaf<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
+    match tree {
+        Tree::Leaf(leaf) => match leaf {
+            Symbol::Number(n) => Ok(Ast::NumberLiteral(*n)),
+            Symbol::StringLiteral(s) => Ok(Ast::StringLiteral(s.to_string())),
+            Symbol::Ident(ident) => Ok(Ast::Identifier(ident.to_string())),
+        },
+        _ => Err(Error::Expected("Tree::Leaf").into()),
+    }
+}
+
+fn ast_from_branch<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
+    let branch = tree.branch().ok_or(Error::Expected("Tree::Branch"))?;
+
+    let name = match branch
+        .first()
+        .ok_or(Error::Expected("nonempty branch"))?
+        .leaf()
+        .ok_or(Error::Expected("Tree::Leaf"))?
+    {
+        Symbol::Ident(s) => *s,
+        _ => return Err(Error::Expected("Symbol::Ident").into()),
+    };
+
+    let args = match branch.get(1..) {
+        Some(rst) => rst.into_iter().map(Ast::from_tree).collect(),
+        None => Ok(Vec::new()),
+    }?;
+
+    Ok(Ast::Call { name, args })
+}
