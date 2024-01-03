@@ -6,11 +6,17 @@ fn main() -> Result<ExitCode> {
     use Instruction::*;
     use Value::*;
     let code = &[
-        Push(U64(34)),
-        Push(U64(35)),
+        Push(U64(0)),
+        Push(U64(1)),
         Operator(Op::Add, 2),
+        Dup,
         Dump,
-        Jump(0)
+        Dup,
+        Push(U64(100)),
+        Comp,
+        Dup,
+        JumpCond(2, true),
+        Halt,
     ];
     run(code, 0)?;
     Ok(ExitCode::SUCCESS)
