@@ -1,17 +1,19 @@
 use std::cmp::Ordering;
 
-use crate::{debugger::Debugger, Error, codegen::Program};
+use crate::{codegen::Program, Error};
 use anyhow::Result;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
 pub enum Value {
     U64(u64),
+    Function(Vec<Instruction>),
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::U64(n) => write!(f, "{}", *n),
+            Value::Function(_) => write!(f, "(func)"),
         }
     }
 }
@@ -21,7 +23,9 @@ impl std::cmp::Ord for Value {
         match self {
             Value::U64(lhs) => match other {
                 Value::U64(rhs) => lhs.cmp(rhs),
+                _ => unimplemented!(),
             },
+            _ => unimplemented!(),
         }
     }
 }
@@ -31,8 +35,10 @@ macro_rules! impl_value_op {
         fn $f(self, rhs: Self) -> Self {
             match self {
                 Self::U64(lhs) => match rhs {
-                    Self::U64(rhs) => Self::U64(lhs $op rhs)
-                }
+                    Self::U64(rhs) => Self::U64(lhs $op rhs),
+                    _ => unimplemented!()
+                },
+                _ => unimplemented!()
             }
         }
     };
@@ -47,6 +53,7 @@ impl Value {
     fn is_truthy(self) -> bool {
         match self {
             Value::U64(n) => n != 0,
+            _ => true,
         }
     }
 
@@ -57,11 +64,12 @@ impl Value {
     fn as_u64(self) -> Result<u64> {
         match self {
             Value::U64(n) => Ok(n),
+            _ => Err(Error::UnexpectedType("U64", "FunctionA").into()),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum Op {
     Add,
     Sub,
@@ -85,27 +93,24 @@ impl Op {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum Instruction {
     Push(Value),
     Operator(Op, usize),
-    Call,
-    Ret,
-    Jump,
-    JumpTruthy,
-    JumpFalsy,
-    Dump,
     Dup,
-    Halt,
+    Drop,
+    Swap,
+    Over,
+    Rot,
 }
 
-type Stack = Vec<Value>;
+type Stack<T> = Vec<T>;
 #[derive(Debug)]
 pub struct Interperter<'a> {
     code: &'a [Instruction],
     addr: usize,
-    stack: Stack,
-    return_reg: Option<Value>,
+    stack: Stack<Value>,
+    variable_stack: Stack<(String, Value)>,
 }
 
 impl<'a> Interperter<'a> {
@@ -114,7 +119,7 @@ impl<'a> Interperter<'a> {
             code,
             addr,
             stack: Stack::new(),
-            return_reg: None,
+            variable_stack: Stack::new(),
         }
     }
 
@@ -133,29 +138,11 @@ impl<'a> Interperter<'a> {
         &self.stack
     }
 
-    fn get(&mut self) -> Option<Instruction> {
-        let ret = self.code.get(self.addr).cloned();
-        self.addr += 1;
-        ret
+    fn instruction(&self) -> Option<&Instruction> {
+        self.code.get(self.addr)
     }
 
-    fn push(&mut self, value: Value) {
-        self.stack.push(value);
-    }
-
-    fn jump(&mut self) -> Result<()> {
-        let addr = self.pop()?.as_u64()? as usize;
-
-        if addr >= self.code.len() {
-            return Err(Error::OutOfBoundsJump.into());
-        }
-
-        self.addr = addr;
-
-        Ok(())
-    }
-
-    fn popn(&mut self, n: usize) -> Result<Box<[Value]>> {
+    fn popn(&mut self, n: usize) -> Result<Vec<Value>> {
         let mut accum = Vec::with_capacity(n);
 
         for (i, e) in (0..n).map(|_| self.stack.pop()).enumerate() {
@@ -165,64 +152,63 @@ impl<'a> Interperter<'a> {
             }
         }
 
-        Ok(accum.into_boxed_slice())
-    }
-
-    fn pop(&mut self) -> Result<Value> {
-        self.stack.pop().ok_or(Error::UnexpectedArgN(1, 0).into())
+        Ok(accum)
     }
 
     fn dup(&mut self) -> Result<()> {
-        let value = self.stack.last().ok_or(Error::EmptyStack)?;
-        self.push(value.clone());
+        let a = self.stack.last().ok_or(Error::UnexpectedArgN(1, 0))?;
+        self.stack.push(a.clone());
+        Ok(())
+    }
+
+    fn drop(&mut self) -> Result<()> {
+        match self.stack.pop().ok_or(Error::UnexpectedArgN(1, 0)) {
+            Err(err) => Err(err.into()),
+            _ => Ok(()),
+        }
+    }
+
+    fn swap(&mut self) -> Result<()> {
+        let xs = self.popn(2)?;
+        self.stack.push(xs[1].clone());
+        self.stack.push(xs[0].clone());
+        Ok(())
+    }
+
+    fn over(&mut self) -> Result<()> {
+        // FIXME
+        let a = self
+            .stack
+            .get(self.stack.len() - 2)
+            .ok_or(Error::UnexpectedArgN(2, 1))?; // penultimate value
+        self.stack.push(a.clone());
+        Ok(())
+    }
+
+    fn rot(&mut self) -> Result<()> {
+        let xs = self.popn(3)?;
+        self.stack.push(xs[2].clone());
+        self.stack.push(xs[0].clone());
+        self.stack.push(xs[2].clone());
         Ok(())
     }
 }
 
-pub fn run(program: &Program, debug: bool) -> Result<()> {
+// See: https://en.wikipedia.org/wiki/Stack-oriented_programming#Stack_effect_diagrams
+// See: https://en.wikipedia.org/wiki/Stack-oriented_programming#PostScript_stacks
+
+pub fn run(program: &Program) -> Result<()> {
+    use Instruction::*;
     let mut ctx = Interperter::new(&program.code, program.entrypoint);
-    let mut debugger = Debugger::new(1000)?;
 
-    if debug {
-        debugger.start()?;
-    }
-
-    while let Some(instruction) = ctx.get() {
-        if debug {
-            debugger.show(&ctx)?;
-        }
+    while let Some(instruction) = ctx.instruction() {
         match instruction {
-            Instruction::Push(value) => ctx.push(value.clone()),
-            Instruction::Operator(operator, argc) => {
-                let value = operator.compute(ctx.popn(argc)?)?;
-                ctx.push(value);
-            }
-            Instruction::Call => {
-                ctx.return_reg = Some(Value::U64(ctx.addr as u64));
-                ctx.jump()?;
-            }
-            Instruction::Ret => {
-                let addr = ctx.return_reg.ok_or(Error::Expected("return address"))?;
-                ctx.push(addr);
-                ctx.jump()?;
-            }
-            Instruction::Jump => ctx.jump()?,
-            Instruction::JumpTruthy => {
-                if ctx.pop()?.is_truthy() {
-                    ctx.jump()?
-                }
-            }
-            Instruction::JumpFalsy => {
-                if ctx.pop()?.is_falsey() {
-                    ctx.jump()?
-                }
-            }
-            Instruction::Dump => println!("{}", ctx.pop()?),
-            Instruction::Dup => ctx.dup()?,
-            Instruction::Halt => break,
-        }
-        if debug {
-            debugger.timeout();
+            Dup => ctx.dup()?,
+            Drop => ctx.drop()?,
+            Swap => ctx.swap()?,
+            Over => ctx.over()?,
+            Rot => ctx.rot()?,
+            _ => todo!(),
         }
     }
     Ok(())
