@@ -24,7 +24,9 @@ pub enum Error {
     #[error("Unmatched '('")]
     UnmatchedOpenExpr,
     #[error("Jump is out of bounds")]
-    OutOfBoundsJump
+    OutOfBoundsJump,
+    #[error("Underflow occured")]
+    Underflow
 }
 
 #[cfg(test)]

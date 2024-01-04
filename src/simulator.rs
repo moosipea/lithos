@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::Error;
+use crate::{debugger::Debugger, Error};
 use anyhow::Result;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
@@ -101,7 +101,7 @@ pub enum Instruction {
 
 type Stack = Vec<Value>;
 #[derive(Debug)]
-struct Interperter<'a> {
+pub struct Interperter<'a> {
     code: &'a [Instruction],
     addr: usize,
     stack: Stack,
@@ -114,6 +114,21 @@ impl<'a> Interperter<'a> {
             addr,
             stack: Stack::new(),
         }
+    }
+
+    // TODO: allow field access?
+    pub fn code(&self) -> &[Instruction] {
+        self.code
+    }
+
+    // TODO: allow field access?
+    pub fn addr(&self) -> usize {
+        self.addr
+    }
+
+    // TODO: allow field access?
+    pub fn stack(&self) -> &[Value] {
+        &self.stack
     }
 
     fn get(&mut self) -> Option<Instruction> {
@@ -156,11 +171,16 @@ impl<'a> Interperter<'a> {
     }
 
     fn dup(&mut self) -> Result<()> {
+        // TODO: FIX UNDERFLOW
         let shift = self.pop()?;
+        let index = self
+            .stack
+            .len()
+            .checked_sub(shift.as_u64()? as usize)
+            .ok_or(Error::Underflow)?
+            .checked_sub(1)
+            .ok_or(Error::Underflow)?;
 
-        println!("{} - {}", self.stack.len(), &shift);
-
-        let index = (self.stack.len() - shift.as_u64()? as usize) - 1;
         let value = self
             .stack
             .get(index)
@@ -173,7 +193,11 @@ impl<'a> Interperter<'a> {
 pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
     let mut ctx = Interperter::new(bytecode, entry);
 
+    // TODO: config
+    let mut debugger = Debugger::new(1000)?;
+
     while let Some(instruction) = ctx.get() {
+        debugger.show(&ctx)?;
         match instruction {
             Instruction::Push(value) => ctx.push(value.clone()),
             Instruction::Pop => {
@@ -206,11 +230,8 @@ pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
             Instruction::Dup => ctx.dup()?,
             Instruction::Halt => break,
         }
-
-        use std::thread;
-        use std::time::Duration;
-        thread::sleep(Duration::from_millis(100));
-
+        // TODO: config
+        debugger.timeout();
     }
     Ok(())
 }
