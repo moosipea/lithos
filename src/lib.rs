@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod lexer;
 pub mod simulator;
+pub mod debugger;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -22,6 +23,8 @@ pub enum Error {
     UndelimitedString,
     #[error("Unmatched '('")]
     UnmatchedOpenExpr,
+    #[error("Jump is out of bounds")]
+    OutOfBoundsJump
 }
 
 #[cfg(test)]

@@ -49,6 +49,16 @@ impl Value {
             Value::U64(n) => n != 0,
         }
     }
+
+    fn is_falsey(self) -> bool {
+        !self.is_truthy()
+    }
+
+    fn as_u64(self) -> Result<u64> {
+        match self {
+            Value::U64(n) => Ok(n),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -81,14 +91,16 @@ pub enum Instruction {
     Pop,
     Operator(Op, usize),
     Comp,
-    Jump(usize),
-    JumpCond(usize, bool),
+    Jump,
+    JumpTruthy,
+    JumpFalsy,
     Dump,
     Dup,
     Halt,
 }
 
 type Stack = Vec<Value>;
+#[derive(Debug)]
 struct Interperter<'a> {
     code: &'a [Instruction],
     addr: usize,
@@ -114,6 +126,18 @@ impl<'a> Interperter<'a> {
         self.stack.push(value);
     }
 
+    fn jump(&mut self) -> Result<()> {
+        let addr = self.pop()?.as_u64()? as usize;
+
+        if addr >= self.code.len() {
+            return Err(Error::OutOfBoundsJump.into());
+        }
+
+        self.addr = addr;
+
+        Ok(())
+    }
+
     fn popn(&mut self, n: usize) -> Result<Box<[Value]>> {
         let mut accum = Vec::with_capacity(n);
 
@@ -130,6 +154,20 @@ impl<'a> Interperter<'a> {
     fn pop(&mut self) -> Result<Value> {
         self.stack.pop().ok_or(Error::UnexpectedArgN(1, 0).into())
     }
+
+    fn dup(&mut self) -> Result<()> {
+        let shift = self.pop()?;
+
+        println!("{} - {}", self.stack.len(), &shift);
+
+        let index = (self.stack.len() - shift.as_u64()? as usize) - 1;
+        let value = self
+            .stack
+            .get(index)
+            .ok_or(Error::Expected("valid index"))?;
+        self.push(value.clone());
+        Ok(())
+    }
 }
 
 pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
@@ -139,8 +177,8 @@ pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
         match instruction {
             Instruction::Push(value) => ctx.push(value.clone()),
             Instruction::Pop => {
-                let _ = ctx.pop()?; // FIXME
-            },
+                ctx.pop()?;
+            }
             Instruction::Operator(operator, argc) => {
                 let value = operator.compute(ctx.popn(argc)?)?;
                 ctx.push(value);
@@ -150,24 +188,29 @@ pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
                 ctx.push(Value::U64(match values[1].cmp(&values[0]) {
                     Ordering::Less => 1, // FIXME
                     Ordering::Equal => 0,
-                    Ordering::Greater => 0, // FIXME
+                    Ordering::Greater => 1, // FIXME
                 }));
             }
-            Instruction::Jump(addr) => ctx.addr = addr,
-            Instruction::JumpCond(addr, cond) => {
-                if ctx.pop()?.is_truthy() == cond {
-                    ctx.addr = addr
+            Instruction::Jump => ctx.jump()?,
+            Instruction::JumpTruthy => {
+                if ctx.pop()?.is_truthy() {
+                    ctx.jump()?
+                }
+            }
+            Instruction::JumpFalsy => {
+                if ctx.pop()?.is_falsey() {
+                    ctx.jump()?
                 }
             }
             Instruction::Dump => println!("{}", ctx.pop()?),
-            Instruction::Dup => {
-                let value = ctx.pop()?;
-                ctx.push(value.clone());
-                ctx.push(value);
-            }
+            Instruction::Dup => ctx.dup()?,
             Instruction::Halt => break,
         }
-    }
 
+        use std::thread;
+        use std::time::Duration;
+        thread::sleep(Duration::from_millis(100));
+
+    }
     Ok(())
 }
