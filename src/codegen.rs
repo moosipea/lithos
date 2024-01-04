@@ -22,14 +22,12 @@ pub struct Program {
 }
 
 struct Compiler {
-    macros: HashMap<String, ()>, // TODO
     functions: HashMap<String, Function>,
 }
 
 impl Compiler {
     fn new() -> Self {
         Self {
-            macros: HashMap::new(),
             functions: HashMap::new(),
         }
     }
@@ -83,38 +81,43 @@ impl Compiler {
             .cloned()
             .ok_or(Error::UnknownFunction(name.to_string()).into())
     }
-
-    fn is_macro(&self, name: &str) -> bool {
-        self.macros.contains_key(name)
-    }
-
-    fn is_function(&self, name: &str) -> bool {
-        self.functions.contains_key(name)
-    }
 }
 
-fn generate<'a>(ast: &'a Ast, compiler: &Compiler) -> Result<Vec<MaybeSolved<'a>>> {
+fn make_function(args: &[Ast]) -> Result<()> {
+    // (fn <ident> a1 a2 a3 ... an <body>)
+    // get function name -> first ident
+    // get args -> take until <body> (call)
+    // body
+    // TODO: variables somehow????
+    // maybe separate stack for variables?
+
+    todo!()
+}
+
+fn generate<'a>(ast: &'a Ast, compiler: &mut Compiler) -> Result<Vec<MaybeSolved<'a>>> {
     use MaybeSolved::*;
     let mut bytecode = Vec::new();
     match ast {
         Ast::NumberLiteral(n) => bytecode.push(Solved(Instruction::Push(Value::U64(*n)))),
-        Ast::Call { name, args } => {
-            if compiler.is_macro(name) {
+        Ast::Call { name, args } => match *name {
+            "fn" => {
+                let f = make_function(args)?;
                 todo!()
-            } else if compiler.is_function(name) {
-                // todo: reverse order?
+            }
+            _ => {
                 for arg in args.into_iter().rev() {
                     bytecode.extend(generate(arg, compiler)?);
                 }
                 bytecode.push(UnresolvedCall(name));
-            } else {
-                return Err(Error::Unimplemented("this").into());
             }
-        }
+        },
         _ => panic!("not yet implemented: {ast:?}"),
     }
     Ok(bytecode)
 }
+
+// See: https://en.wikipedia.org/wiki/Stack-oriented_programming#Stack_effect_diagrams
+// See: https://en.wikipedia.org/wiki/Stack-oriented_programming#PostScript_stacks
 
 pub fn compile(asts: &[Ast]) -> Result<Program> {
     let mut compiler = Compiler::new();
@@ -126,7 +129,7 @@ pub fn compile(asts: &[Ast]) -> Result<Program> {
 
     // Todo: declarative
     let mut code = Vec::new();
-    for chunk in asts.into_iter().map(|ast| generate(ast, &compiler)) {
+    for chunk in asts.into_iter().map(|ast| generate(ast, &mut compiler)) {
         code.extend(chunk?);
     }
 

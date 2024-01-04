@@ -1,8 +1,9 @@
 use anyhow::Result;
 use rust_lisp_parser::{
-    ast::{Tree, make_tree},
+    ast::{make_tree, Tree},
     codegen::compile,
-    lexer::lex, simulator::run,
+    lexer::lex,
+    simulator::run,
 };
 use std::process::ExitCode;
 
@@ -12,7 +13,19 @@ fn main() -> Result<ExitCode> {
     let tree = Tree::try_construct(&tokens)?;
     let ast = make_tree(&tree)?;
     let program = compile(&ast)?;
-    run(&program, false)?;
+
+    for (i, instruction) in program.code.iter().enumerate() {
+        println!(
+            "{instruction:?}{}",
+            if i == program.entrypoint {
+                "<--- ENTRYPOINT"
+            } else {
+                ""
+            }
+        );
+    }
+
+    //run(&program, false)?;
 
     Ok(ExitCode::SUCCESS)
 }
