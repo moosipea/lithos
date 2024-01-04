@@ -26,7 +26,9 @@ pub enum Error {
     #[error("Jump is out of bounds")]
     OutOfBoundsJump,
     #[error("Underflow occured")]
-    Underflow
+    Underflow,
+    #[error("Stack is empty")]
+    EmptyStack
 }
 
 #[cfg(test)]

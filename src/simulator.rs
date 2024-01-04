@@ -88,9 +88,9 @@ impl Op {
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Push(Value),
-    Pop,
     Operator(Op, usize),
-    Comp,
+    Call,
+    Ret,
     Jump,
     JumpTruthy,
     JumpFalsy,
@@ -105,6 +105,7 @@ pub struct Interperter<'a> {
     code: &'a [Instruction],
     addr: usize,
     stack: Stack,
+    return_reg: Option<Value>,
 }
 
 impl<'a> Interperter<'a> {
@@ -113,6 +114,7 @@ impl<'a> Interperter<'a> {
             code,
             addr,
             stack: Stack::new(),
+            return_reg: None,
         }
     }
 
@@ -171,49 +173,38 @@ impl<'a> Interperter<'a> {
     }
 
     fn dup(&mut self) -> Result<()> {
-        // TODO: FIX UNDERFLOW
-        let shift = self.pop()?;
-        let index = self
-            .stack
-            .len()
-            .checked_sub(shift.as_u64()? as usize)
-            .ok_or(Error::Underflow)?
-            .checked_sub(1)
-            .ok_or(Error::Underflow)?;
-
-        let value = self
-            .stack
-            .get(index)
-            .ok_or(Error::Expected("valid index"))?;
+        let value = self.stack.last().ok_or(Error::EmptyStack)?;
         self.push(value.clone());
         Ok(())
     }
 }
 
-pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
+pub fn run(bytecode: &[Instruction], entry: usize, debug: bool) -> Result<()> {
     let mut ctx = Interperter::new(bytecode, entry);
-
-    // TODO: config
     let mut debugger = Debugger::new(1000)?;
 
+    if debug {
+        debugger.start()?;
+    }
+
     while let Some(instruction) = ctx.get() {
-        debugger.show(&ctx)?;
+        if debug {
+            debugger.show(&ctx)?;
+        }
         match instruction {
             Instruction::Push(value) => ctx.push(value.clone()),
-            Instruction::Pop => {
-                ctx.pop()?;
-            }
             Instruction::Operator(operator, argc) => {
                 let value = operator.compute(ctx.popn(argc)?)?;
                 ctx.push(value);
             }
-            Instruction::Comp => {
-                let values = ctx.popn(2)?;
-                ctx.push(Value::U64(match values[1].cmp(&values[0]) {
-                    Ordering::Less => 1, // FIXME
-                    Ordering::Equal => 0,
-                    Ordering::Greater => 1, // FIXME
-                }));
+            Instruction::Call => {
+                ctx.return_reg = Some(Value::U64(ctx.addr as u64));
+                ctx.jump()?;
+            }
+            Instruction::Ret => {
+                let addr = ctx.return_reg.ok_or(Error::Expected("return address"))?;
+                ctx.push(addr);
+                ctx.jump()?;
             }
             Instruction::Jump => ctx.jump()?,
             Instruction::JumpTruthy => {
@@ -230,8 +221,9 @@ pub fn run(bytecode: &[Instruction], entry: usize) -> Result<()> {
             Instruction::Dup => ctx.dup()?,
             Instruction::Halt => break,
         }
-        // TODO: config
-        debugger.timeout();
+        if debug {
+            debugger.timeout();
+        }
     }
     Ok(())
 }

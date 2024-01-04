@@ -20,16 +20,17 @@ pub struct Debugger {
 
 impl Debugger {
     pub fn new(timeout: u64) -> Result<Self> {
-        let mut stdout = stdout();
-
-        stdout.execute(EnterAlternateScreen)?;
-
         Ok(Self {
             timeout,
             page_size: 32,
-            stdout,
+            stdout: stdout(),
         })
     }
+
+    pub fn start(&mut self) -> Result<()> {
+        self.stdout.execute(EnterAlternateScreen)?;
+        Ok(())
+    } 
 
     pub fn show(&mut self, ctx: &Interperter) -> Result<()> {
         self.stdout.queue(Clear(ClearType::All))?;
