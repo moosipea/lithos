@@ -30,7 +30,7 @@ impl Debugger {
     pub fn start(&mut self) -> Result<()> {
         self.stdout.execute(EnterAlternateScreen)?;
         Ok(())
-    } 
+    }
 
     pub fn show(&mut self, ctx: &Interperter) -> Result<()> {
         self.stdout.queue(Clear(ClearType::All))?;

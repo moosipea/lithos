@@ -87,6 +87,7 @@ impl Tree<'_> {
 
 #[derive(Debug, Clone)]
 pub enum Ast<'a> {
+    // TODO: Value literal?
     NumberLiteral(u64),
     StringLiteral(String),
     Identifier(String),
@@ -94,7 +95,7 @@ pub enum Ast<'a> {
 }
 
 impl<'a> Ast<'a> {
-    pub fn from_tree(tree: &'a Tree) -> Result<Self> {
+    fn from_tree(tree: &'a Tree) -> Result<Self> {
         match tree {
             Tree::Branch(_) => ast_from_branch(tree),
             Tree::Leaf(_) => ast_from_leaf(tree),
@@ -132,4 +133,11 @@ fn ast_from_branch<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
     }?;
 
     Ok(Ast::Call { name, args })
+}
+
+pub fn make_tree<'a>(tree: &'a Tree) -> Result<Box<[Ast<'a>]>> {
+    match tree {
+        Tree::Branch(children) => children.into_iter().map(Ast::from_tree).collect(),
+        _ => Ast::from_tree(tree).map(|ok| vec![ok].into_boxed_slice()),
+    }
 }

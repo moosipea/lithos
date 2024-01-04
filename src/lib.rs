@@ -1,7 +1,8 @@
 pub mod ast;
+pub mod codegen;
+pub mod debugger;
 pub mod lexer;
 pub mod simulator;
-pub mod debugger;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -28,7 +29,7 @@ pub enum Error {
     #[error("Underflow occured")]
     Underflow,
     #[error("Stack is empty")]
-    EmptyStack
+    EmptyStack,
 }
 
 #[cfg(test)]

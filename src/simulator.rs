@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::{debugger::Debugger, Error};
+use crate::{debugger::Debugger, Error, codegen::Program};
 use anyhow::Result;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
@@ -179,8 +179,8 @@ impl<'a> Interperter<'a> {
     }
 }
 
-pub fn run(bytecode: &[Instruction], entry: usize, debug: bool) -> Result<()> {
-    let mut ctx = Interperter::new(bytecode, entry);
+pub fn run(program: &Program, debug: bool) -> Result<()> {
+    let mut ctx = Interperter::new(&program.code, program.entrypoint);
     let mut debugger = Debugger::new(1000)?;
 
     if debug {

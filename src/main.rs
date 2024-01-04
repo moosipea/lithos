@@ -1,24 +1,18 @@
-use std::process::ExitCode;
 use anyhow::Result;
-use rust_lisp_parser::simulator::{Instruction, run, Value, Op};
+use rust_lisp_parser::{
+    ast::{Tree, make_tree},
+    codegen::compile,
+    lexer::lex, simulator::run,
+};
+use std::process::ExitCode;
 
 fn main() -> Result<ExitCode> {
-    use Instruction::*;
-    use Value::*;
+    let src = "(add 34 35)";
+    let tokens = lex(src)?;
+    let tree = Tree::try_construct(&tokens)?;
+    let ast = make_tree(&tree)?;
+    let program = compile(&ast)?;
+    run(&program, false)?;
 
-    // Goal: function that squares a number
-    let code = &[
-        Push(U64(5)), // argument
-        Push(U64(5)), // function address
-        Call,
-        Dump,
-        Halt,
-
-        // begin function
-        Dup,
-        Operator(Op::Mul, 2),
-        Ret,
-    ];
-    run(code, 0, false)?;
     Ok(ExitCode::SUCCESS)
 }
