@@ -1,8 +1,6 @@
 pub mod ast;
 pub mod codegen;
-pub mod debugger;
 pub mod lexer;
-pub mod simulator;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
