@@ -1,5 +1,3 @@
-pub mod ast;
-pub mod codegen;
 pub mod lexer;
 
 #[derive(thiserror::Error, Debug)]

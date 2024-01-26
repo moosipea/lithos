@@ -1,18 +1,15 @@
 use anyhow::Result;
-use rust_lisp_parser::{
-    ast::{make_tree, Tree},
-    lexer::lex, codegen::codegen,
-};
-use std::process::ExitCode;
+use rust_lisp_parser::lexer::*;
 
-fn main() -> Result<ExitCode> {
+fn main() -> Result<()> {
     let src = "(add 34 35)";
-    let tokens = lex(src)?;
-    let tree = Tree::try_construct(&tokens)?;
-    let _ast = make_tree(&tree)?;
+    let code = remove_comments(src);   
+    let lexer = Lexer::new(&code);
+    let tokens: Vec<_> = lexer.collect();
 
-    let asm = codegen();
-    println!("{asm}");
-
-    Ok(ExitCode::SUCCESS)
+    for token in tokens {
+	println!("{token:?}");
+    }
+    
+    Ok(())
 }
