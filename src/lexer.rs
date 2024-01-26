@@ -1,16 +1,13 @@
-//use crate::Error;
-use std::str::Chars;
-//use anyhow::Result;
-
 #[derive(Debug)]
 pub struct Positioning {
-    start: usize,
+    line: usize,
+    column: usize,
     length: usize,
 }
 
 impl Positioning {
-    fn new(start: usize, length: usize) -> Self {
-	Self { start, length }
+    fn new(line: usize, column: usize, length: usize) -> Self {
+	Self { line, column, length }
     }
 }
 
@@ -28,7 +25,7 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    fn open_or_close(ch: char, cursor: usize) -> Option<Self> {
+    fn open_or_close(ch: char, line: usize) -> Option<Self> {
 	let kind = match ch {
 	    '(' => Some(TokenKind::Open),
 	    ')' => Some(TokenKind::Close),
@@ -36,17 +33,17 @@ impl<'a> Token<'a> {
 	}?;
 	Some(Self {
 	    kind,
-	    pos: Positioning::new(cursor, 1),
+	    pos: Positioning::new(line, 0, 1),
 	})
     }
 
-    fn symbol(content: &'a str, cursor: usize) -> Option<Self> {
+    fn symbol(content: &'a str, line: usize) -> Option<Self> {
 	if content.is_empty() {
 	    return None;
 	}
 	Some(Self {
 	    kind: TokenKind::Symbol(content),
-	    pos: Positioning::new(cursor, content.len()),
+	    pos: Positioning::new(line, 0, content.len()),
 	})
     }
 }
@@ -96,6 +93,8 @@ pub struct Lexer<'a> {
     chars: Vec<char>,        
     buffer: StrBuffer<'a>,
     cursor: usize,
+    line: usize,
+    column: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -104,13 +103,19 @@ impl<'a> Lexer<'a> {
             chars: src.chars().collect(),
 	    buffer: StrBuffer::new(src),
 	    cursor: 0,
+	    line: 0,
+	    column: 0,
         }
     }
 
+    fn advance_cursor(&mut self) {
+	self.cursor += 1;
+	self.column += 1;
+    }
 }
 
 // N.B! Positions of token may be incorrect because of this
-pub fn remove_comments(string: &str) -> String {
+fn remove_comments(string: &str) -> String {
     let mut comment = false;
     string.chars().filter(|ch| {
 	match ch {
@@ -122,6 +127,11 @@ pub fn remove_comments(string: &str) -> String {
     }).collect()
 }
 
+pub fn preprocess(src: &str) -> String {
+    let normal_newlines = src.replace("\r\n", "\n");
+    remove_comments(&normal_newlines)
+}
+
 // TODO: See: https://crates.io/crates/unicode-segmentation
 
 impl<'a> Iterator for Lexer<'a> {
@@ -129,29 +139,38 @@ impl<'a> Iterator for Lexer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
 	loop {
 	    let ch = *self.chars.get(self.cursor)?;
-	    println!("{ch:?}");
+
+	    if ch == '\n' {
+		self.line += 1;
+		self.column = 0;
+	    }
+	    
 	    match ch {
 		'(' | ')' => if self.buffer.is_empty() {
-		    let tok = Token::open_or_close(ch, self.cursor);
-		    self.cursor += 1;
+		    let tok = Token::open_or_close(ch, self.line);
+		    self.advance_cursor();
 		    return tok;
 		} else {
-		    let tok = Token::symbol(self.buffer.content()?, self.buffer.start);
+		    let tok = Token::symbol(self.buffer.content()?, self.line);
 		    self.buffer.reset(self.cursor)?;
 		    return tok;
 		},
-		w if w.is_whitespace() => if !self.buffer.is_empty() {
-		    let tok = Token::symbol(self.buffer.content()?, self.buffer.start);
-		    self.cursor += 1;
-		    self.buffer.reset(self.cursor)?;
-		    return tok;
+		w if w.is_whitespace() => {
+		    if !self.buffer.is_empty() {
+			let tok = Token::symbol(self.buffer.content()?, self.line);
+			self.advance_cursor();
+			self.buffer.reset(self.cursor)?;
+			return tok;
+		    } else {
+			self.advance_cursor();
+		    }
 		},
 		_ => {
 		    if self.buffer.is_empty() {
 			self.buffer.reset(self.cursor)?;
 		    }
 		    self.buffer.extend_by_one()?;
-		    self.cursor += 1;
+		    self.advance_cursor();
 		}
 	    }
 	}
