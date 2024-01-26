@@ -1,4 +1,3 @@
-use crate::lexer::Symbol;
 use crate::lexer::Token;
 use crate::Error;
 use anyhow::Result;

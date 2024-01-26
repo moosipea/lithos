@@ -2,17 +2,10 @@ use crate::Error;
 use anyhow::Result;
 
 #[derive(Debug, PartialEq)]
-pub enum Symbol<'a> {
-    Ident(&'a str),
-    Number(u64),
-    StringLiteral(&'a str),
-}
-
-#[derive(Debug, PartialEq)]
 pub enum Token<'a> {
     Open,
     Close,
-    Symbol(Symbol<'a>),
+    Symbol(&'a str),
 }
 
 struct Lexer<'a> {
@@ -105,13 +98,5 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 pub fn lex(src: &str) -> Result<Vec<Token>> {
-    let lexer = Lexer::new(src);
-    let mut tokens = Vec::new();
-    for maybe in lexer {
-        match maybe {
-            Ok(tok) => tokens.push(tok),
-            Err(err) => return Err(err),
-        }
-    }
-    Ok(tokens)
+    Lexer::new(src).collect()
 }
