@@ -27,7 +27,7 @@ pub enum Error {
     #[error("Stack is empty")]
     EmptyStack,
     #[error("Unexpected type: expected {0}, but got {1}")]
-    UnexpectedType(&'static str, &'static str)
+    UnexpectedType(&'static str, &'static str),
 }
 
 #[cfg(test)]
