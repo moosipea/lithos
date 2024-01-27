@@ -23,8 +23,8 @@ fn main() -> Result<()> {
     //let lexer = Lexer::new(&code);
     //let tokens: Vec<_> = lexer.collect();
 
-    for str_token in Tokeniser::new(&code) {
-	println!("{str_token:?}");
+    for token in Scanner::new(&code).evaluate() {
+	println!("{token:?}");
     }
     
     Ok(())
