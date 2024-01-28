@@ -1,151 +1,52 @@
+pub mod ast;
 pub mod lexer;
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Expected {0} args, got {1}")]
-    UnexpectedArgN(usize, usize),
-    #[error("Expected {0}")]
-    Expected(&'static str),
-    #[error("Unknown function: {0}")]
-    UnknownFunction(String),
-    #[error("Unimplemented: {0}")]
-    Unimplemented(&'static str),
-    #[error("Code generation failed")]
-    CodegenFailed,
-    #[error("Trailing whitespace")]
-    TrailingWhitespace,
-    #[error("Undelimited comment")]
-    UndelimitedComment,
-    #[error("Undelimited string")]
-    UndelimitedString,
-    #[error("Unmatched '('")]
-    UnmatchedOpenExpr,
-    #[error("Jump is out of bounds")]
-    OutOfBoundsJump,
-    #[error("Underflow occured")]
-    Underflow,
-    #[error("Stack is empty")]
-    EmptyStack,
-    #[error("Unexpected type: expected {0}, but got {1}")]
-    UnexpectedType(&'static str, &'static str),
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::*;
-    use crate::lexer::*;
-    use Symbol as S;
-    use Token as T;
+    use super::ast::*;
+    use super::lexer::*;
+
+    const COMMON_INPUT: &str = "; Comment\n(a b c (d 34 \"hello world\"))";
 
     #[test]
-    fn lexer_basic() {
-        let sample = "(1 2 3)";
-        let expected = &[
-            T::Open,
-            T::Symbol(S::Number(1)),
-            T::Symbol(S::Number(2)),
-            T::Symbol(S::Number(3)),
-            T::Close,
+    fn scanner() {
+        let lexemes: Vec<_> = Scanner::new(COMMON_INPUT)
+            .map(|lexeme| lexeme.content())
+            .collect();
+        let expected = vec![
+            "(",
+            "a",
+            "b",
+            "c",
+            "(",
+            "d",
+            "34",
+            "\"hello world\"",
+            ")",
+            ")",
         ];
-        assert_eq!(lex(sample).expect("Lexing failed!"), expected)
+        assert_eq!(lexemes, expected);
     }
 
     #[test]
-    fn lexer_ident() {
-        let sample = "(add 1 2)";
-        let expected = &[
-            T::Open,
-            T::Symbol(S::Ident("add")),
-            T::Symbol(S::Number(1)),
-            T::Symbol(S::Number(2)),
-            T::Close,
+    fn evaluator() {
+        use TokenKind::*;
+        let tokens: Vec<_> = Scanner::new(COMMON_INPUT)
+            .evaluate()
+            .map(|token| token.kind())
+            .collect();
+        let expected = vec![
+            Open,
+            Identifier("a"),
+            Identifier("b"),
+            Identifier("c"),
+            Open,
+            Identifier("d"),
+            NumberLiteral("34"),
+            StringLiteral("hello world"),
+            Close,
+            Close,
         ];
-        assert_eq!(lex(sample).expect("Lexing failed!"), expected)
-    }
-
-    #[test]
-    fn lexer_string_literal() {
-        let sample = "(print \"foo\" \"bar\" \"baz\")";
-        let expected = &[
-            T::Open,
-            T::Symbol(S::Ident("print")),
-            T::Symbol(S::StringLiteral("foo")),
-            T::Symbol(S::StringLiteral("bar")),
-            T::Symbol(S::StringLiteral("baz")),
-            T::Close,
-        ];
-        assert_eq!(lex(sample).expect("Lexing failed!"), expected);
-    }
-
-    #[test]
-    fn lexer_comment() {
-        let sample = "; what does this do?\n(+ 34 35)";
-        let expected = &[
-            T::Open,
-            T::Symbol(S::Ident("+")),
-            T::Symbol(S::Number(34)),
-            T::Symbol(S::Number(35)),
-            T::Close,
-        ];
-        assert_eq!(lex(sample).expect("Lexing failed!"), expected);
-    }
-
-    #[test]
-    fn ast_basic() {
-        let sample = &[
-            T::Open,
-            T::Symbol(S::Number(1)),
-            T::Symbol(S::Number(2)),
-            T::Symbol(S::Number(3)),
-            T::Close,
-        ];
-        let expected = Tree::Branch(vec![Tree::Branch(vec![
-            Tree::Leaf(&S::Number(1)),
-            Tree::Leaf(&S::Number(2)),
-            Tree::Leaf(&S::Number(3)),
-        ])]);
-        assert_eq!(Tree::try_construct(sample).unwrap(), expected);
-    }
-
-    #[test]
-    fn ast_nested() {
-        let sample = &[
-            T::Open,
-            T::Symbol(S::Number(1)),
-            T::Symbol(S::Number(2)),
-            T::Open,
-            T::Symbol(S::Ident("+")),
-            T::Symbol(S::Number(1)),
-            T::Symbol(S::Number(2)),
-            T::Close,
-            T::Close,
-        ];
-        let expected = Tree::Branch(vec![Tree::Branch(vec![
-            Tree::Leaf(&S::Number(1)),
-            Tree::Leaf(&S::Number(2)),
-            Tree::Branch(vec![
-                Tree::Leaf(&S::Ident("+")),
-                Tree::Leaf(&S::Number(1)),
-                Tree::Leaf(&S::Number(2)),
-            ]),
-        ])]);
-        assert_eq!(Tree::try_construct(sample).unwrap(), expected);
-    }
-
-    #[test]
-    fn ast_ident() {
-        let sample = &[
-            T::Open,
-            T::Symbol(S::Ident("add")),
-            T::Symbol(S::Number(1)),
-            T::Symbol(S::Number(2)),
-            T::Close,
-        ];
-        let expected = Tree::Branch(vec![Tree::Branch(vec![
-            Tree::Leaf(&S::Ident("add")),
-            Tree::Leaf(&S::Number(1)),
-            Tree::Leaf(&S::Number(2)),
-        ])]);
-        assert_eq!(Tree::try_construct(sample).unwrap(), expected);
+        assert_eq!(tokens, expected);
     }
 }

@@ -1,142 +1,69 @@
-use crate::lexer::Token;
-use crate::Error;
-use anyhow::Result;
+use crate::lexer::*;
+use std::fmt::Debug;
 
-fn take_expr<'a>(toks: &'a [Token]) -> Result<(&'a [Token<'a>], &'a [Token<'a>])> {
-    match toks[0] {
-        Token::Symbol(_) => Ok((&toks[0..1], &toks[1..])),
-        Token::Open => {
-            let mut scope = 0;
-            for (i, t) in toks.iter().enumerate() {
-                match t {
-                    Token::Open => scope += 1,
-                    Token::Close => scope -= 1,
-                    _ => {}
-                }
-                if scope == 0 {
-                    return Ok((&toks[0..i + 1], &toks[i + 1..]));
-                }
-            }
-            Err(Error::UnmatchedOpenExpr.into())
-        }
-        _ => Err(Error::Expected("( or symbol)").into()),
-    }
+// FIXME
+#[derive(Debug)]
+pub enum Tree<T: Debug> {
+    Nil,
+    Leaf(T),
+    Branch(Box<[Tree<T>]>),
 }
 
-fn take_toplevel_exprs<'a>(toks: &'a [Token]) -> Result<Vec<&'a [Token<'a>]>> {
-    if toks.is_empty() {
-        return Err(Error::Expected("nonempty list").into());
-    }
-
-    let mut exprs = Vec::new();
-    let mut tail = toks;
-    while !tail.is_empty() {
-        let head;
-        (head, tail) = take_expr(tail)?;
-        exprs.push(head);
-    }
-    Ok(exprs)
-}
-
-fn slice_middle<'a, T>(slc: &'a [T]) -> Option<&'a [T]> {
-    if slc.len() < 3 {
+fn expr_inside<'a>(tokens: &'a [Token<'a>]) -> Option<&'a [Token<'a>]> {
+    if tokens.len() <= 2 {
         return None;
     }
-    Some(&slc[1..slc.len() - 1])
+    tokens.get(1..tokens.len() - 1)
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Tree<'a> {
-    Branch(Vec<Tree<'a>>),
-    Leaf(&'a Symbol<'a>),
+fn is_empty_expr(tokens: &[Token]) -> bool {
+    tokens
+        .get(0..=1)
+        .and_then(|two| Some(two[0].kind() == TokenKind::Open && two[0].kind() == TokenKind::Close))
+        .unwrap_or(false)
 }
 
-impl Tree<'_> {
-    pub fn try_construct<'a>(toks: &'a [Token]) -> Result<Tree<'a>> {
-        match toks {
-            [Token::Symbol(sym)] => Ok(Tree::Leaf(sym)),
-            _ => {
-                let expressions = take_toplevel_exprs(toks)?;
-                let tree: Result<Vec<_>, _> = expressions
-                    .into_iter()
-                    .map(|e| match slice_middle(e) {
-                        Some(middle) => Self::try_construct(middle),
-                        None => Self::try_construct(e),
-                    })
-                    .collect();
-                Ok(Tree::Branch(tree?))
+pub fn build_syntax_tree<'a>(tokens: &'a [Token<'a>]) -> Tree<Token<'a>> {
+    Tree::Branch(
+        ExprTaker::new(tokens)
+            .map(|expr| match expr_inside(expr) {
+                Some(inside) => build_syntax_tree(inside),
+                None => match is_empty_expr(expr) {
+                    true => Tree::Nil,
+                    false => Tree::Leaf(expr[0]),
+                },
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
+}
+
+struct ExprTaker<'a> {
+    tokens: &'a [Token<'a>],
+}
+
+impl<'a> ExprTaker<'a> {
+    fn new(tokens: &'a [Token<'a>]) -> Self {
+        Self { tokens }
+    }
+}
+
+impl<'a> Iterator for ExprTaker<'a> {
+    type Item = &'a [Token<'a>];
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut scope = 0;
+        for (i, token) in self.tokens.iter().enumerate() {
+            match token.kind() {
+                TokenKind::Open => scope += 1,
+                TokenKind::Close => scope -= 1,
+                _ => {}
+            }
+            if scope == 0 {
+                let ret = &self.tokens.get(..=i)?;
+                self.tokens = &self.tokens.get(i + 1..)?;
+                return Some(ret);
             }
         }
-    }
-
-    pub fn branch(&self) -> Option<&[Tree]> {
-        match self {
-            Tree::Branch(children) => Some(children),
-            _ => None,
-        }
-    }
-
-    pub fn leaf(&self) -> Option<&Symbol> {
-        match self {
-            Tree::Leaf(sym) => Some(sym),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Ast<'a> {
-    // TODO: Value literal?
-    NumberLiteral(u64),
-    StringLiteral(String),
-    Identifier(String),
-    Call { name: &'a str, args: Vec<Ast<'a>> },
-}
-
-impl<'a> Ast<'a> {
-    fn from_tree(tree: &'a Tree) -> Result<Self> {
-        match tree {
-            Tree::Branch(_) => ast_from_branch(tree),
-            Tree::Leaf(_) => ast_from_leaf(tree),
-        }
-    }
-}
-
-fn ast_from_leaf<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
-    match tree {
-        Tree::Leaf(leaf) => match leaf {
-            Symbol::Number(n) => Ok(Ast::NumberLiteral(*n)),
-            Symbol::StringLiteral(s) => Ok(Ast::StringLiteral(s.to_string())),
-            Symbol::Ident(ident) => Ok(Ast::Identifier(ident.to_string())),
-        },
-        _ => Err(Error::Expected("Tree::Leaf").into()),
-    }
-}
-
-fn ast_from_branch<'a>(tree: &'a Tree) -> Result<Ast<'a>> {
-    let branch = tree.branch().ok_or(Error::Expected("Tree::Branch"))?;
-
-    let name = match branch
-        .first()
-        .ok_or(Error::Expected("nonempty branch"))?
-        .leaf()
-        .ok_or(Error::Expected("Tree::Leaf"))?
-    {
-        Symbol::Ident(s) => *s,
-        _ => return Err(Error::Expected("Symbol::Ident").into()),
-    };
-
-    let args = match branch.get(1..) {
-        Some(rst) => rst.into_iter().map(Ast::from_tree).collect(),
-        None => Ok(Vec::new()),
-    }?;
-
-    Ok(Ast::Call { name, args })
-}
-
-pub fn make_tree<'a>(tree: &'a Tree) -> Result<Box<[Ast<'a>]>> {
-    match tree {
-        Tree::Branch(children) => children.into_iter().map(Ast::from_tree).collect(),
-        _ => Ast::from_tree(tree).map(|ok| vec![ok].into_boxed_slice()),
+        None
     }
 }

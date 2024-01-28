@@ -1,4 +1,4 @@
-use anyhow::Result;
+use rust_lisp_parser::ast::*;
 use rust_lisp_parser::lexer::*;
 
 fn read_one_of(paths: &[&str]) -> Option<String> {
@@ -12,17 +12,12 @@ fn read_one_of(paths: &[&str]) -> Option<String> {
     None
 }
 
-fn main() -> Result<()> {
+fn main() {
     let src = read_one_of(&["test.pj", "../test.pj"]).expect("Expected to read file");
-
     let code = preprocess(&src);
     println!("Source:\n{}\n", &code);
-    //let lexer = Lexer::new(&code);
-    //let tokens: Vec<_> = lexer.collect();
 
-    for token in Scanner::new(&code).evaluate() {
-        println!("{token:?}");
-    }
-
-    Ok(())
+    let tokens: Vec<_> = Scanner::new(&code).evaluate().collect();
+    let tree = build_syntax_tree(&tokens);
+    println!("{tree:#?}");
 }

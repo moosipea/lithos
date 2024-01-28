@@ -1,12 +1,11 @@
 ; This function calculates the factorial of a given unsigned integer.
 ; If n is 0, the result of the function must be 1.
 ; Otherwise, the function returns n*(n-1)!.
-;(def factorial (n)
-;  (if-else (> 1 n)
-;    (* n (factorial (- n 1)))
-;    1))
-;
-; Comment between code
-;(add 1 2)
+(def factorial (n)
+  (if-else (> 1 n)
+    (* n (factorial (- n 1)))
+    1))
 
+; Comment between code
+(add 1 2)
 (print "Hello, world!\n")

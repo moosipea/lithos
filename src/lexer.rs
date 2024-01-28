@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Lexeme<'a> {
     content: &'a str,
     index: usize,
@@ -7,6 +7,10 @@ pub struct Lexeme<'a> {
 impl<'a> Lexeme<'a> {
     fn new(content: &'a str, index: usize) -> Self {
         Self { content, index }
+    }
+
+    pub fn content(&self) -> &'a str {
+        self.content
     }
 
     fn positioning(&self) -> Positioning {
@@ -109,13 +113,13 @@ impl<'a> Iterator for Scanner<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Positioning {
     index: usize,
     length: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind<'a> {
     Open,
     Close,
@@ -124,7 +128,7 @@ pub enum TokenKind<'a> {
     Identifier(&'a str),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Token<'a> {
     kind: TokenKind<'a>,
     pos: Positioning,
@@ -138,6 +142,10 @@ fn shrink_str<'a>(string: &'a str) -> &'a str {
 }
 
 impl<'a> Token<'a> {
+    pub fn kind(&self) -> TokenKind<'a> {
+        self.kind
+    }
+
     fn open(pos: Positioning) -> Self {
         Self {
             kind: TokenKind::Open,
