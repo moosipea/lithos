@@ -17,10 +17,15 @@ fn expr_inside<'a>(tokens: &'a [Token<'a>]) -> Option<&'a [Token<'a>]> {
 }
 
 fn is_empty_expr(tokens: &[Token]) -> bool {
-    tokens
-        .get(0..=1)
-        .and_then(|two| Some(two[0].kind() == TokenKind::Open && two[0].kind() == TokenKind::Close))
-        .unwrap_or(false)
+    match tokens
+        .into_iter()
+        .map(Token::kind)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        [TokenKind::Open, TokenKind::Close] => true,
+        _ => false,
+    }
 }
 
 pub fn build_syntax_tree<'a>(tokens: &'a [Token<'a>]) -> Tree<Token<'a>> {

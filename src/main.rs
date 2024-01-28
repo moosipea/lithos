@@ -13,7 +13,8 @@ fn read_one_of(paths: &[&str]) -> Option<String> {
 }
 
 fn main() {
-    let src = read_one_of(&["test.pj", "../test.pj"]).expect("Expected to read file");
+    //let src = read_one_of(&["test.pj", "../test.pj"]).expect("Expected to read file");
+    let src = "(print () 42)".to_string();
     let code = preprocess(&src);
     println!("Source:\n{}\n", &code);
 
