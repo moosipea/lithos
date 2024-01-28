@@ -72,3 +72,43 @@ impl<'a> Iterator for ExprTaker<'a> {
         None
     }
 }
+
+//pub struct NumberLiteral<'a>(&'a str);
+pub struct Identifier<'a>(&'a str);
+pub enum BinaryOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    LessThan,
+    GreaterThan,
+    Equal,
+}
+
+type Branch<'a> = Box<[SyntaxTree<'a>]>;
+type Number = i64;
+pub enum SyntaxTree<'a> {
+    // (_ a b)
+    // where _ is a binary operation (+, -, *, : etc.)
+    BinaryOp(BinaryOp, [Box<SyntaxTree<'a>>; 2]),
+    // (1 2 3) etc.
+    InlineList(Branch<'a>),
+    // (fname arg1 arg2) etc.
+    Call(Identifier<'a>, Branch<'a>),
+
+    NumberLiteral(Number),
+    StringLiteral(&'a str),
+    Variable(Identifier<'a>),
+}
+
+impl<'a> SyntaxTree<'a> {
+    pub fn build(tree: Tree<Token<'a>>) -> Self {
+	match tree {
+	    Tree::Branch(inside) => match &*inside {
+		[first] => todo!(),
+		_ => todo!()		  
+	    },
+	    _ => todo!()
+	}
+    }
+}
